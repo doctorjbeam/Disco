@@ -317,11 +317,6 @@
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <ProjectExtensions>
-    <VisualStudio>
-      <UserProperties BuildVersion_BuildVersioningStyle="None.DeltaBaseYear.MonthAndDayStamp.TimeStamp" BuildVersion_BuildAction="Both" BuildVersion_UseGlobalSettings="False" BuildVersion_UpdateFileVersion="True" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_DetectChanges="False" BuildVersion_StartDate="2011/7/1" />
-    </VisualStudio>
-  </ProjectExtensions>
   <PropertyGroup>
     <PostBuildEvent>COPY "$(TargetPath)" "$(ProjectDir)..\Disco.Web\ClientBin"</PostBuildEvent>
   </PropertyGroup>

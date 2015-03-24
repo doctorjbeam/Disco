@@ -9,6 +9,14 @@ namespace Disco.Models.Repository
 {
     public class DeviceDetail
     {
+        public const string ScopeHardware = "Hardware";
+
+        public const string HardwareKeyLanMacAddress = "LanMacAddress";
+        public const string HardwareKeyWLanMacAddress = "WLanMacAddress";
+        public const string HardwareKeyACAdapter = "ACAdapter";
+        public const string HardwareKeyBattery = "Battery";
+        public const string HardwareKeyKeyboard = "Keyboard";
+
         [Column(Order = 0), Key]
         public string DeviceSerialNumber { get; set; }
         

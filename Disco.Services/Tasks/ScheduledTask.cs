@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using Disco.Data.Repository;
 using Quartz;
-using Disco.Data.Repository;
+using System;
 
 namespace Disco.Services.Tasks
 {
@@ -16,8 +13,8 @@ namespace Disco.Services.Tasks
 
         public virtual bool CancelInitiallySupported { get { return true; } }
         public virtual bool SingleInstanceTask { get { return true; } }
-        public virtual bool IsSilent { get { return false; } }
         public virtual bool LogExceptionsOnly { get { return false; } }
+
         public abstract string TaskName { get; }
         protected abstract void ExecuteTask();
 
@@ -89,6 +86,8 @@ namespace Disco.Services.Tasks
             {
                 if (!this.Status.FinishedTimestamp.HasValue) // Scheduled Task Didn't Trigger 'Finished'
                     this.Status.Finished();
+
+                this.Status.Finally();
 
                 var nextTriggerTime = context.NextFireTimeUtc;
                 if (nextTriggerTime.HasValue)

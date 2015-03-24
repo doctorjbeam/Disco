@@ -1,26 +1,35 @@
-﻿using Disco.Models.BI.Device;
+﻿using Disco.Models.Services.Devices.Importing;
 using Disco.Models.UI.Device;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using System.Web;
 
 namespace Disco.Web.Models.Device
 {
     public class ImportReviewModel : DeviceImportReviewModel
     {
-        public string ImportParseTaskId { get; set; }
-        public string ImportFilename { get; set; }
-        public List<ImportDevice> ImportDevices { get; set; }
+        public IDeviceImportContext Context { get; set; }
 
-        public static ImportReviewModel FromImportDeviceSession(ImportDeviceSession session)
+        public int StatisticErrorRecords { get; set; }
+        public int StatisticNewRecords { get; set; }
+        public int StatisticModifiedRecords { get; set; }
+        public int StatisticUnmodifiedRecords { get; set; }
+
+        public int StatisticImportRecords
         {
-            return new ImportReviewModel()
-            {
-                ImportParseTaskId = session.ImportParseTaskId,
-                ImportFilename = session.ImportFilename,
-                ImportDevices = session.ImportDevices
-            };
+            get { return this.StatisticNewRecords + StatisticModifiedRecords; }
+        }
+
+        public IEnumerable<Tuple<DeviceImportFieldTypes, string>> HeaderTypes { get; set; }
+
+        public ImportReviewModel()
+        {
+            HeaderTypes = typeof(DeviceImportFieldTypes)
+                .GetFields()
+                .Select(p => Tuple.Create(p, (DisplayAttribute)p.GetCustomAttributes(typeof(DisplayAttribute), false).FirstOrDefault()))
+                .Where(p => p.Item2 != null)
+                .Select(p => Tuple.Create((DeviceImportFieldTypes)p.Item1.GetRawConstantValue(), p.Item2.Name)).ToList();
         }
     }
 }

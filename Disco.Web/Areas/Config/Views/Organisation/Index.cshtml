@@ -76,9 +76,10 @@
                 }
                 @if (Model.OrganisationAddresses.Count > 1)
                 {
-                    <div id="messageMultiSiteMode" style="padding: 0.7em 0.7em; margin-top: 20px;" class="ui-state-highlight ui-corner-all">
-                        <span style="margin-right: 0.3em; float: left;" class="ui-icon ui-icon-info"></span>
-                        Multi-Site mode is recommended where multiple addresses are configured.
+                    <div id="messageMultiSiteMode" class="info-box">
+                        <p class="fa-p">
+                            <i class="fa fa-info-circle"></i>Multi-Site mode is recommended where multiple addresses are configured.
+                        </p>
                     </div>
                 }
             </td>
@@ -119,7 +120,7 @@
                                 <td>
                                     @if (canConfigAddresses)
                                     {
-                                        <span class="edit" title="Edit Address"></span><span class="delete" title="Delete Address"></span>
+                                        <i class="fa fa-edit information edit" title="Edit Address"></i> <i class="fa fa-times-circle warning delete" title="Delete Address"></i>
                                     }
                                 </td>
                             </tr>
@@ -139,7 +140,7 @@
     <div id="dialogUpdateOrganisationLogo" title="Update Organisation Logo">
         @using (Html.BeginForm(MVC.API.System.OrganisationLogo(true, null, null), FormMethod.Post, new { enctype = "multipart/form-data" }))
         {
-            <h3>Update Action</h3>
+            <h3>Update Organisation Logo</h3>
             <div style="margin-top: 10px; padding-bottom: 5px;">
                 <input id="updateOrganisationLogoResetLogo" type="radio" name="ResetLogo" value="true"
                     checked="checked" /><label for="updateOrganisationLogoResetLogo">Remove Logo</label>
@@ -147,7 +148,7 @@
             <div style="margin-top: 5px; border-top: 1px dashed #aaa; padding-top: 5px;">
                 <input id="updateOrganisationLogoUploadLogo" type="radio" name="ResetLogo" value="false" /><label
                     for="updateOrganisationLogoUploadLogo">Upload Logo</label>
-                <div id="updateOrganisationLogoUploadLogoContainer" style="display: none; padding-left: 10px;">
+                <div id="updateOrganisationLogoUploadLogoContainer" style="display: none; padding: 4px 0 0 14px;">
                     <input id="updateOrganisationLogoUploadLogoImage" type="file" name="Image" />
                     <span id="updateOrganisationLogoUploadLogoImageRequired" class="field-validation-valid field-validation-error">* Required</span>
                 </div>
@@ -174,7 +175,6 @@
             });
             buttonDialog.dialog({
                 resizable: false,
-                height: 200,
                 modal: true,
                 autoOpen: false,
                 buttons: {
@@ -205,8 +205,11 @@
 {
     <div id="dialogConfirmRemove" title="Delete this Address?">
         <p>
-            <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
-            This item will be permanently deleted and cannot be recovered. Are you sure?
+            <i class="fa fa-exclamation-triangle fa-lg warning"></i>
+            This item will be permanently deleted and cannot be recovered.
+        </p>
+        <p>
+            <strong>Are you sure?</strong>
         </p>
     </div>
     <div id="dialogEdit" title="Edit/Create Address">
@@ -291,78 +294,78 @@
                     }
                 }
             });
-            $('#organisationAddresses').find('span.delete').click(function () {
+            $('#organisationAddresses').find('i.delete').click(function () {
                 var componentRow = $(this).closest('tr');
                 var id = componentRow.attr('data-addressid');
                 if (id) {
                     var dialog = $("#dialogConfirmRemove");
                     var buttons = dialog.dialog("option", "buttons");
                     buttons['Delete'] = function () { $(this).dialog("disable"); window.location.href = '@(Url.Action(MVC.API.System.DeleteOrganisationAddress()))' + '?redirect=true&id=' + id; };
-                var buttons = dialog.dialog("option", "buttons", buttons);
+                    var buttons = dialog.dialog("option", "buttons", buttons);
+                    dialog.dialog('open');
+                }
+            });
+
+            var editAddress = function (element) {
+                var id = '', shortName = '', name = '', address = '', suburb = '', postcode = '', state = '', country = '', phoneNumber = '', faxNumber = '';
+                var dialog = $('#dialogEdit');
+                if (element) {
+                    id = element.attr('data-addressid');
+                    shortName = element.find('.shortName').text();
+                    name = element.find('.name').text();
+                    address = element.find('.address').text();
+                    suburb = element.find('.suburb').text();
+                    postcode = element.find('.postcode').text();
+                    state = element.find('.state').text();
+                    country = element.find('.country').text();
+                    phoneNumber = element.find('.phoneNumber').text();
+                    faxNumber = element.find('.faxNumber').text();
+                    dialog.attr('data-addressid', id);
+                    dialog.dialog('option', 'title', 'Edit Address: ' + name);
+                } else {
+                    dialog.attr('data-addressid', null);
+                    dialog.dialog('option', 'title', 'Create Address');
+                }
+
+                $('#editShortName').val(shortName);
+                $('#editName').val(name);
+                $('#editAddress').val(address);
+                $('#editSuburb').val(suburb);
+                $('#editPostcode').val(postcode);
+                $('#editState').val(state);
+                $('#editCountry').val(country);
+                $('#editPhoneNumber').val(phoneNumber);
+                $('#editFaxNumber').val(faxNumber);
                 dialog.dialog('open');
             }
-        });
 
-        var editAddress = function (element) {
-            var id = '', shortName = '', name = '', address = '', suburb = '', postcode = '', state = '', country = '', phoneNumber = '', faxNumber = '';
-            var dialog = $('#dialogEdit');
-            if (element) {
-                id = element.attr('data-addressid');
-                shortName = element.find('.shortName').text();
-                name = element.find('.name').text();
-                address = element.find('.address').text();
-                suburb = element.find('.suburb').text();
-                postcode = element.find('.postcode').text();
-                state = element.find('.state').text();
-                country = element.find('.country').text();
-                phoneNumber = element.find('.phoneNumber').text();
-                faxNumber = element.find('.faxNumber').text();
-                dialog.attr('data-addressid', id);
-                dialog.dialog('option', 'title', 'Edit Address: ' + name);
-            } else {
-                dialog.attr('data-addressid', null);
-                dialog.dialog('option', 'title', 'Create Address');
-            }
+            $('#organisationAddresses').find('i.edit').click(function () {
+                var componentRow = $(this).closest('tr');
+                editAddress(componentRow);
+            });
 
-            $('#editShortName').val(shortName);
-            $('#editName').val(name);
-            $('#editAddress').val(address);
-            $('#editSuburb').val(suburb);
-            $('#editPostcode').val(postcode);
-            $('#editState').val(state);
-            $('#editCountry').val(country);
-            $('#editPhoneNumber').val(phoneNumber);
-            $('#editFaxNumber').val(faxNumber);
-            dialog.dialog('open');
-        }
+            $('#createAddress').click(function () {
+                editAddress();
+                return false;
+            });
 
-        $('#organisationAddresses').find('span.edit').click(function () {
-            var componentRow = $(this).closest('tr');
-            editAddress(componentRow);
-        });
+            var submitAddress = function () {
+                var dialog = $('#dialogEdit');
+                var data = {
+                    Id: dialog.attr('data-addressid'),
+                    ShortName: $('#editShortName').val(),
+                    Name: $('#editName').val(),
+                    Address: $('#editAddress').val(),
+                    Suburb: $('#editSuburb').val(),
+                    Postcode: $('#editPostcode').val(),
+                    State: $('#editState').val(),
+                    Country: $('#editCountry').val(),
+                    PhoneNumber: $('#editPhoneNumber').val(),
+                    FaxNumber: $('#editFaxNumber').val()
+                };
 
-        $('#createAddress').click(function () {
-            editAddress();
-            return false;
-        });
-
-        var submitAddress = function () {
-            var dialog = $('#dialogEdit');
-            var data = {
-                Id: dialog.attr('data-addressid'),
-                ShortName: $('#editShortName').val(),
-                Name: $('#editName').val(),
-                Address: $('#editAddress').val(),
-                Suburb: $('#editSuburb').val(),
-                Postcode: $('#editPostcode').val(),
-                State: $('#editState').val(),
-                Country: $('#editCountry').val(),
-                PhoneNumber: $('#editPhoneNumber').val(),
-                FaxNumber: $('#editFaxNumber').val()
-            };
-
-            $.ajax({
-                url: '@(Url.Action(MVC.API.System.UpdateOrganisationAddress()))',
+                $.ajax({
+                    url: '@(Url.Action(MVC.API.System.UpdateOrganisationAddress()))',
                 dataType: 'json',
                 data: data,
                 type: 'post',
@@ -381,21 +384,21 @@
             });
 
         };
-        $("#dialogEdit").dialog({
-            resizable: false,
-            modal: true,
-            autoOpen: false,
-            width: 350,
-            buttons: {
-                "Save": function () {
-                    submitAddress();
-                },
-                Cancel: function () {
-                    $(this).dialog("close");
+            $("#dialogEdit").dialog({
+                resizable: false,
+                modal: true,
+                autoOpen: false,
+                width: 350,
+                buttons: {
+                    "Save": function () {
+                        submitAddress();
+                    },
+                    Cancel: function () {
+                        $(this).dialog("close");
+                    }
                 }
-            }
-        });
+            });
 
-    });
+        });
     </script>
 }

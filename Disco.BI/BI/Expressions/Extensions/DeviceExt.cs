@@ -1,10 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using Disco.BI.Extensions;
 using Disco.Models.Repository;
-using Disco.BI.Extensions;
-using Disco.BI.Interop.ActiveDirectory;
+using Disco.Services.Interop.ActiveDirectory;
+using System;
+using System.Linq;
 
 namespace Disco.BI.Expressions.Extensions
 {
@@ -14,7 +12,7 @@ namespace Disco.BI.Expressions.Extensions
         {
             var adMachineAccount = Device.ActiveDirectoryAccount(PropertyName);
             if (adMachineAccount != null)
-                return adMachineAccount.GetPropertyValue(PropertyName, Index);
+                return adMachineAccount.GetPropertyValues<object>(PropertyName).Skip(Index).FirstOrDefault();
             else
                 return null;
         }

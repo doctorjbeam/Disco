@@ -3,12 +3,16 @@ using System.Web.Mvc;
 using System.Web.WebPages;
 using RazorGenerator.Mvc;
 
-[assembly: WebActivatorEx.PostApplicationStartMethod(typeof(Disco.Web.App_Start.RazorGeneratorMvcStart), "Start")]
+[assembly: WebActivatorEx.PostApplicationStartMethod(typeof(Disco.Web.RazorGeneratorMvcStart), "Start")]
 
-namespace Disco.Web.App_Start {
-    public static class RazorGeneratorMvcStart {
-        public static void Start() {
-            var engine = new PrecompiledMvcEngine(typeof(RazorGeneratorMvcStart).Assembly) {
+namespace Disco.Web
+{
+    public static class RazorGeneratorMvcStart
+    {
+        public static void Start()
+        {
+            var engine = new PrecompiledMvcEngine(typeof(RazorGeneratorMvcStart).Assembly)
+            {
 #if DEBUG
                 UsePhysicalViewsIfNewer = true
 #else

@@ -1,5 +1,7 @@
 ﻿using Disco.Models.Repository;
+using Disco.Services.Jobs.Noticeboards;
 using Disco.Services.Web;
+using Disco.Web.Areas.Public.Models.UserHeldDevices;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web.Mvc;
@@ -8,98 +10,73 @@ namespace Disco.Web.Areas.Public.Controllers
 {
     public partial class HeldDevicesController : DatabaseController
     {
-        #region Helpers
-
-        private List<Models.HeldDevices.HeldDeviceModel> GetHeldDevices(IQueryable<Job> query)
+        public virtual ActionResult Index(List<int?> DeviceProfileInclude, List<int?> DeviceProfileExclude, List<string> DeviceAddressInclude, List<string> DeviceAddressExclude)
         {
-            var jobs = query.Where(j =>
-                !j.ClosedDate.HasValue &&
-                j.DeviceSerialNumber != null &&
-                ((j.DeviceHeld.HasValue && !j.DeviceReturnedDate.HasValue) || j.WaitingForUserAction.HasValue)
-                ).Select(j => new Models.HeldDevices.HeldDeviceQueryModel
-                {
-                    JobId = j.Id,
-                    DeviceSerialNumber = j.DeviceSerialNumber,
-                    DeviceComputerName = j.Device.ComputerName,
-                    DeviceLocation = j.Device.Location,
-                    DeviceProfileId = j.Device.DeviceProfileId,
-                    DeviceAddressId = j.Device.DeviceProfile.DefaultOrganisationAddress,
-                    UserId = j.Device.AssignedUserId,
-                    UserDisplayName = j.Device.AssignedUser.DisplayName,
-                    WaitingForUserAction = j.WaitingForUserAction.HasValue || ((j.JobMetaNonWarranty.AccountingChargeRequiredDate.HasValue || j.JobMetaNonWarranty.AccountingChargeAddedDate.HasValue) && !j.JobMetaNonWarranty.AccountingChargePaidDate.HasValue),
-                    WaitingForUserActionSince = j.WaitingForUserAction.HasValue ? j.WaitingForUserAction : (j.JobMetaNonWarranty.AccountingChargeRequiredDate.HasValue ? j.JobMetaNonWarranty.AccountingChargeRequiredDate : j.JobMetaNonWarranty.AccountingChargeAddedDate),
-                    ReadyForReturn = j.DeviceReadyForReturn.HasValue,
-                    EstimatedReturnTime = j.ExpectedClosedDate,
-                    ReadyForReturnSince = j.DeviceReadyForReturn
-                }).GroupBy(j => j.DeviceSerialNumber);
+            IQueryable<Job> query = Database.Jobs;
 
-            var thd = new List<Models.HeldDevices.HeldDeviceModel>();
-            foreach (var job in jobs)
+            if (DeviceProfileInclude != null)
+                query = query.Where(j => DeviceProfileInclude.Contains(j.Device.DeviceProfileId));
+            if (DeviceProfileExclude != null)
+                query = query.Where(j => !DeviceProfileExclude.Contains(j.Device.DeviceProfileId));
+            if (DeviceAddressInclude != null && DeviceAddressInclude.Count > 0)
             {
-                if (job.Any(j => j.WaitingForUserAction))
-                {
-                    thd.Add(job.Where(j => j.WaitingForUserAction).OrderBy(j => j.WaitingForUserActionSince).FirstOrDefault().ToUserHeldDeviceModel(Database));
-                }
-                else
-                {
-                    if (job.All(j => j.ReadyForReturn))
-                    {
-                        thd.Add(job.FirstOrDefault().ToUserHeldDeviceModel(Database));
-                    }
-                    else
-                    {
-                        thd.Add(job.Where(j => !j.ReadyForReturn).OrderByDescending(j => j.EstimatedReturnTime).FirstOrDefault().ToUserHeldDeviceModel(Database));
-                    }
-                }
+                var addressIds = Database.DiscoConfiguration.OrganisationAddresses.Addresses.Where(a => DeviceAddressInclude.Contains(a.ShortName)).Select(a => a.Id).ToList();
+                query = query.Where(j => addressIds.Contains(j.Device.DeviceProfile.DefaultOrganisationAddress));
             }
-            return thd;
-        }
-        
-        private List<Models.HeldDevices.HeldDeviceModel> GetHeldDevices()
-        {
-            return GetHeldDevices(Database.Jobs);
-        }
-        private Models.HeldDevices.HeldDeviceModel GetHeldDevice(string DeviceSerialNumber)
-        {
-            return GetHeldDevices(Database.Jobs.Where(j => j.DeviceSerialNumber == DeviceSerialNumber)).FirstOrDefault();
-        }
-        #endregion
+            if (DeviceAddressExclude != null && DeviceAddressExclude.Count > 0)
+            {
+                var addressIds = Database.DiscoConfiguration.OrganisationAddresses.Addresses.Where(a => DeviceAddressExclude.Contains(a.ShortName)).Select(a => (int?)a.Id).ToList();
+                query = query.Where(j => j.Device.DeviceProfile.DefaultOrganisationAddress == null || !addressIds.Contains(j.Device.DeviceProfile.DefaultOrganisationAddress));
+            }
 
-        public virtual ActionResult Index()
-        {
-            return View(GetHeldDevices());
+            var m = Disco.Services.Jobs.Noticeboards.HeldDevices.GetHeldDevices(query);
+
+            return View(m);
         }
 
         public virtual ActionResult ReadyForReturnXml()
         {
-            var readyForReturn = GetHeldDevices().Where(j => j.ReadyForReturn && !j.WaitingForUserAction).ToArray();
+            var readyForReturn = Disco.Services.Jobs.Noticeboards.HeldDevices.GetHeldDevices(Database)
+                .Where(j => j.ReadyForReturn && !j.WaitingForUserAction).Cast<HeldDeviceItem>().ToArray();
+
             return new Extensions.XmlResult(readyForReturn);
         }
         public virtual ActionResult WaitingForUserActionXml()
         {
-            var waitingForUserAction = GetHeldDevices().Where(j => j.WaitingForUserAction).ToArray();
+            var waitingForUserAction = Disco.Services.Jobs.Noticeboards.HeldDevices.GetHeldDevices(Database)
+                .Where(j => j.WaitingForUserAction).Cast<HeldDeviceItem>().ToArray();
+
             return new Extensions.XmlResult(waitingForUserAction);
         }
         public virtual ActionResult HeldDevicesXml()
         {
-            var heldDevices = GetHeldDevices().Where(j => !j.ReadyForReturn && !j.WaitingForUserAction).ToArray();
+            var heldDevices = Disco.Services.Jobs.Noticeboards.HeldDevices.GetHeldDevices(Database)
+                .Where(j => !j.ReadyForReturn && !j.WaitingForUserAction).Cast<HeldDeviceItem>().ToArray();
+
             return new Extensions.XmlResult(heldDevices);
         }
 
         public virtual ActionResult Noticeboard()
         {
-            return View();
+            var model = new NoticeboardModel()
+            {
+                DefaultTheme = Database.DiscoConfiguration.JobPreferences.DefaultNoticeboardTheme
+            };
+
+            return View(model);
         }
 
         public virtual ActionResult HeldDevice(string id)
         {
-            var uhd = GetHeldDevice(id);
-            return Json(uhd, JsonRequestBehavior.AllowGet);
+            var m = Disco.Services.Jobs.Noticeboards.HeldDevices.GetHeldDevice(Database, id);
+
+            return Json(m, JsonRequestBehavior.AllowGet);
         }
         public virtual ActionResult HeldDevices()
         {
-            var uhd = GetHeldDevices();
-            return Json(uhd, JsonRequestBehavior.AllowGet);
+            var m = Disco.Services.Jobs.Noticeboards.HeldDevices.GetHeldDevices(Database);
+
+            return Json(m, JsonRequestBehavior.AllowGet);
         }
     }
 }

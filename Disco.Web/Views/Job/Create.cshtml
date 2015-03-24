@@ -10,7 +10,7 @@
     {
         @Html.HiddenFor(m => m.DeviceSerialNumber)
         @Html.HiddenFor(m => m.UserId)
-        @Html.HiddenFor(m => m.QuickLogDestinationUrl)
+        @Html.HiddenFor(m => m.SourceUrl)
     
         @Html.Partial(MVC.Job.Views._CreateSubject, Model)
         @Html.ValidationSummary(true)
@@ -27,12 +27,13 @@
                 {
                     <div id="createJob_SubType_@(jt.Id)" class="createJob_SubType">
                         <div class="createJob_SubTypes">
-                            @CommonHelpers.CheckBoxList("SubTypes", Model.JobSubTypes.Where(jst => jst.JobTypeId == jt.Id).ToList().ToSelectListItems(Model.SubTypes), 3)
+                            @CommonHelpers.CheckBoxList("SubTypes", jt.JobSubTypes.ToSelectListItems(Model.SubTypes, true), 3, true, null, false)
                         </div>
                     </div>   
                 }
             </div>
         </div>
+        if (Authorization.Has(Claims.Job.Properties.DeviceHeld)){
         <div id="createJob_DeviceHeldContainer" class="createJob_Component">
             @Html.ValidationMessageFor(m => m.DeviceHeld)
             @Html.HiddenFor(m => m.DeviceHeld)
@@ -50,6 +51,9 @@
                 </tr>
             </table>
         </div>
+        }else{
+            @Html.Hidden("DeviceHeld", false)
+        }
         <div id="createJob_CommentsContainer" class="createJob_Component">
             <table>
                 <tr>
@@ -62,25 +66,27 @@
                 </tr>
             </table>
         </div>
+        if (Authorization.Has(Claims.Job.Actions.Close)){
         <div id="createJob_QuickLogContainer" class="createJob_Component">
             <div id="createJob_QuickLogAutoCloseContainer">
-                <h3>Quick Log</h3>
                 <input id="createJob_QuickLog" name="QuickLog" type="checkbox" value="true" /><label for="createJob_QuickLog">Automatically close this job</label>
             </div>
             <div id="createJob_QuickLogTaskTimeContainer">
-                <h3>Task Time</h3>
-                @Html.ValidationMessageFor(m => m.QuickLogTaskTimeMinutes)
-                <input type="radio" id="createJob_TaskTime10" name="QuickLogTaskTimeMinutes" value="10" /><label for="createJob_TaskTime10"> 10 Minutes</label>
-                <input type="radio" id="createJob_TaskTime30" name="QuickLogTaskTimeMinutes" value="30" /><label for="createJob_TaskTime30"> 30 Minutes</label>
-                <input type="radio" id="createJob_TaskTime60" name="QuickLogTaskTimeMinutes" value="60" /><label for="createJob_TaskTime60"> 1 Hour</label>
-                <input type="radio" id="createJob_TaskTime120" name="QuickLogTaskTimeMinutes" value="120" /><label for="createJob_TaskTime120"> 2 Hours</label>
-                <input type="radio" id="createJob_TaskTimeOther" name="QuickLogTaskTimeMinutes" value="" /><label for="createJob_TaskTimeOther"> Other</label>
+                <h4>Task Time:</h4>
+                <input type="radio" id="createJob_TaskTime5" name="QuickLogTaskTimeMinutes" value="5" /><label for="createJob_TaskTime5">5 Minutes</label>
+                <input type="radio" id="createJob_TaskTime10" name="QuickLogTaskTimeMinutes" value="10" /><label for="createJob_TaskTime10">10 Minutes</label>
+                <input type="radio" id="createJob_TaskTime30" name="QuickLogTaskTimeMinutes" value="30" /><label for="createJob_TaskTime30">30 Minutes</label>
+                <input type="radio" id="createJob_TaskTime60" name="QuickLogTaskTimeMinutes" value="60" /><label for="createJob_TaskTime60">1 Hour</label>
+                <input type="radio" id="createJob_TaskTime120" name="QuickLogTaskTimeMinutes" value="120" /><label for="createJob_TaskTime120">2 Hours</label>
+                <input type="radio" id="createJob_TaskTimeOther" name="QuickLogTaskTimeMinutes" value="" /><label for="createJob_TaskTimeOther">Other</label>
                 <span id="createJob_TaskTimeOtherMinutesContainer">
                     <input type="number" id="createJob_TaskTimeOtherMinutes" name="QuickLogTaskTimeMinutesOther" value="" disabled="disabled" />
                     Minutes
                 </span>
+                @Html.ValidationMessageFor(m => m.QuickLogTaskTimeMinutes)
             </div>
         </div>
+        }
     }
     <script type="text/javascript">
         $(function () {
@@ -88,7 +94,7 @@
             var init = true;
             //#region Parent Dialog
             if (window.parent && window.parent.document) {
-                $('#QuickLogDestinationUrl').val(window.parent.window.location.href);
+                $('#SourceUrl').val(window.parent.window.location.href);
 
                 var parentDialog = $('#createJobDialog', window.parent.document);
                 if (parentDialog.length > 0) {
@@ -166,6 +172,8 @@
                     isValid = false;
                 }
 
+                @if (Authorization.Has(Claims.Job.Actions.Close)){
+                <text>
                 // Validate QuickLog Task Time
                 if ($quickLog.is(':checked')) {
                     var selectedTime = $quickLogTaskTimes.filter(':checked');
@@ -187,6 +195,8 @@
                 } else {
                     $quickLogTaskTimeValidationMessage.removeClass('field-validation-valid').addClass('field-validation-error');
                 }
+                </text>
+                }
 
                 return isValid;
             }
@@ -202,6 +212,7 @@
             //#region DeviceHeld
             var $deviceHeld = $('#DeviceHeld');
 
+            @if (Authorization.Has(Claims.Job.Properties.DeviceHeld)){<text>
             if ($('#DeviceSerialNumber').val()) {
                 switch ($deviceHeld.val()) {
                     case 'True':
@@ -232,8 +243,11 @@
                 $deviceHeld.val('False');
                 $('#createJob_DeviceHeldContainer').hide();
             }
+            </text>}
             //#endregion
 
+            @if (Authorization.Has(Claims.Job.Actions.Close)){
+                <text>
             //#region QuickLog
             var $quickLog = $('#createJob_QuickLog');
             var $quickLogContainer = $('#createJob_QuickLogContainer');
@@ -252,6 +266,7 @@
                 if ($deviceHeld.val() === 'True') {
                     quickLogAllowed = false;
                 } else {
+                    // Allow Quick-Log only for certain Job Types
                     var selectedType = $jobTypes.filter(':checked').val();
                     switch (selectedType) {
                         case 'HMisc':
@@ -281,8 +296,10 @@
             $quickLog.change(function () {
                 if ($(this).is(':checked')) {
                     $quickLogTaskTimeContainer.slideDown();
+                    $('#createJob_SubTypes').addClass('isQuickLog');
                 } else {
                     $quickLogTaskTimeContainer.slideUp();
+                    $('#createJob_SubTypes').removeClass('isQuickLog');
                 }
             });
 
@@ -296,6 +313,8 @@
                 }
             });
             //#endregion
+            </text>
+            }
 
             init = false;
         });

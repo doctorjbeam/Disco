@@ -1,8 +1,11 @@
 ﻿using Disco.BI.Extensions;
-using Disco.BI.Interop.ActiveDirectory;
+using Disco.Data.Configuration;
 using Disco.Services.Authorization;
+using Disco.Services.Interop.ActiveDirectory;
+using Disco.Services.Interop.DiscoServices;
 using Disco.Services.Web;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
@@ -17,7 +20,7 @@ namespace Disco.Web.Areas.API.Controllers
         [DiscoAuthorize(Claims.Config.System.Show)]
         public virtual ActionResult UpdateLastNetworkLogonDates()
         {
-            var taskStatus = ActiveDirectoryUpdateLastNetworkLogonDateJob.ScheduleImmediately();
+            var taskStatus = Disco.Services.Interop.ActiveDirectory.ADNetworkLogonDatesUpdateTask.ScheduleImmediately();
 
             return RedirectToAction(MVC.Config.Logging.TaskStatus(taskStatus.SessionId));
         }
@@ -64,7 +67,7 @@ namespace Disco.Web.Areas.API.Controllers
         [DiscoAuthorize(Claims.Config.System.Show)]
         public virtual ActionResult UpdateCheck()
         {
-            var ts = Disco.BI.Interop.Community.UpdateCheckTask.ScheduleNow();
+            var ts = Disco.Services.Interop.DiscoServices.UpdateQueryTask.ScheduleNow();
             ts.SetFinishedUrl(Url.Action(MVC.Config.SystemConfig.Index()));
             return RedirectToAction(MVC.Config.Logging.TaskStatus(ts.SessionId));
         }
@@ -123,7 +126,7 @@ namespace Disco.Web.Areas.API.Controllers
 
             if (Image != null && Image.ContentLength > 0)
             {
-                if (Image.ContentType.StartsWith("image/", StringComparison.InvariantCultureIgnoreCase))
+                if (Image.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
                 {
                     Database.DiscoConfiguration.OrganisationLogo = Image.InputStream;
 
@@ -216,6 +219,153 @@ namespace Disco.Web.Areas.API.Controllers
         }
 
         #endregion
+
+        #endregion
+
+        #region Active Directory
+
+        [DiscoAuthorize(Claims.Config.System.ConfigureActiveDirectory)]
+        public virtual ActionResult UpdateActiveDirectorySearchScope(List<string> Containers, bool redirect = false)
+        {
+            ActiveDirectory.Context.UpdateSearchContainers(Database, Containers);
+            Database.SaveChanges();
+
+            if (redirect)
+                return RedirectToAction(MVC.Config.SystemConfig.Index());
+            else
+                return Json("OK", JsonRequestBehavior.AllowGet);
+        }
+
+        [DiscoAuthorize(Claims.Config.System.ConfigureActiveDirectory)]
+        public virtual ActionResult UpdateActiveDirectorySearchAllForestServers(bool SearchAllForestServers, bool redirect = false)
+        {
+            try
+            {
+                var result = ActiveDirectory.Context.UpdateSearchAllForestServers(Database, SearchAllForestServers);
+                
+                Database.SaveChanges();
+
+                if (!result)
+                {
+                    var forestServers = ActiveDirectory.Context.ForestServers;
+                    if (forestServers.Count > ActiveDirectory.MaxForestServerSearch)
+                        throw new InvalidOperationException(string.Format("This forest contains more than the Max Forest Server Search restriction ({0})", ActiveDirectory.MaxForestServerSearch));
+                    else
+                        throw new InvalidOperationException("Unable to change the 'SearchEntireForest' property for an unknown reason, please report this bug");
+                }
+
+                if (redirect)
+                    return RedirectToAction(MVC.Config.SystemConfig.Index());
+                else
+                    return Json("OK", JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                if (redirect)
+                    throw;
+                else
+                    return Json(string.Format("Error: {0}", ex.Message), JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        [DiscoAuthorizeAny(Claims.Config.System.ConfigureActiveDirectory, Claims.Config.DeviceProfile.Configure)]
+        public virtual ActionResult DomainOrganisationalUnits()
+        {
+            var domainOUs = ActiveDirectory.RetrieveADOrganisationalUnitStructure()
+                .Select(d => new Models.System.DomainOrganisationalUnitsModel() { Domain = d.Item1, OrganisationalUnits = d.Item2})
+                .Select(ous => ous.ToFancyTreeNode()).ToList();
+
+            return new JsonResult()
+            {
+                Data = domainOUs,
+                JsonRequestBehavior = JsonRequestBehavior.AllowGet,
+                MaxJsonLength = int.MaxValue
+            };
+        }
+
+        [DiscoAuthorizeAny(Claims.DiscoAdminAccount, Claims.Config.JobQueue.Configure)]
+        public virtual ActionResult SearchSubjects(string term)
+        {
+            var groupResults = ActiveDirectory.SearchADGroups(term).Cast<IADObject>();
+            var userResults = ActiveDirectory.SearchADUserAccounts(term, true).Cast<IADObject>();
+
+            var results = groupResults.Concat(userResults).OrderBy(r => r.SamAccountName)
+                .Select(r => Models.Shared.SubjectDescriptorModel.FromActiveDirectoryObject(r)).ToList();
+
+            return Json(results, JsonRequestBehavior.AllowGet);
+        }
+
+        [DiscoAuthorizeAny(Claims.Config.UserFlag.Configure)]
+        public virtual ActionResult SearchGroupSubjects(string term)
+        {
+            var groupResults = ActiveDirectory.SearchADGroups(term).Cast<IADObject>();
+
+            var results = groupResults.OrderBy(r => r.SamAccountName)
+                .Select(r => Models.Shared.SubjectDescriptorModel.FromActiveDirectoryObject(r)).ToList();
+
+            return Json(results, JsonRequestBehavior.AllowGet);
+        }
+
+        [DiscoAuthorizeAny(Claims.DiscoAdminAccount, Claims.Config.JobQueue.Configure)]
+        public virtual ActionResult Subject(string Id)
+        {
+            var subject = ActiveDirectory.RetrieveADObject(Id, Quick: true);
+
+            if (subject == null)
+                return Json(null, JsonRequestBehavior.AllowGet);
+            else
+                return Json(Models.Shared.SubjectDescriptorModel.FromActiveDirectoryObject(subject), JsonRequestBehavior.AllowGet);
+        }
+
+        [DiscoAuthorizeAny(Claims.Config.UserFlag.Configure)]
+        public virtual ActionResult SyncActiveDirectoryManagedGroup(string id, string redirectUrl = null)
+        {
+            ADManagedGroup managedGroup;
+            
+            if (!ActiveDirectory.Context.ManagedGroups.TryGetValue(id, out managedGroup))
+                throw new ArgumentException("Unknown Managed Group Key");
+
+            var taskStatus = ADManagedGroupsSyncTask.ScheduleSync(managedGroup);
+            
+            if (redirectUrl != null)
+                taskStatus.SetFinishedUrl(redirectUrl);
+
+            return RedirectToAction(MVC.Config.Logging.TaskStatus(taskStatus.SessionId));
+        }
+
+        #endregion
+
+        #region Proxy Settings
+
+        [DiscoAuthorize(Claims.Config.System.ConfigureProxy)]
+        public virtual ActionResult UpdateProxySettings(string ProxyAddress, int? ProxyPort, string ProxyUsername, string ProxyPassword, bool redirect = false)
+        {
+            // Default Proxy Port
+            if (!ProxyPort.HasValue)
+                ProxyPort = 8080;
+
+            SystemConfiguration config = Database.DiscoConfiguration;
+            //config.DataStoreLocation = DataStoreLocation;
+            config.ProxyAddress = ProxyAddress;
+            config.ProxyPort = ProxyPort.Value;
+            config.ProxyUsername = ProxyUsername;
+            config.ProxyPassword = ProxyPassword;
+            DiscoApplication.SetGlobalProxy(ProxyAddress, ProxyPort.Value, ProxyUsername, ProxyPassword);
+
+            Database.SaveChanges();
+
+            // Try and check for updates if needed - After Proxy Changed
+            if (Database.DiscoConfiguration.UpdateLastCheckResponse == null
+                || Database.DiscoConfiguration.UpdateLastCheckResponse.UpdateResponseDate < DateTime.Now.AddDays(-1))
+            {
+                UpdateQueryTask.ScheduleNow();
+            }
+
+            if (redirect)
+                return RedirectToAction(MVC.Config.SystemConfig.Index());
+            else
+                return Json("OK", JsonRequestBehavior.AllowGet);
+        }
 
         #endregion
 

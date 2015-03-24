@@ -1,7 +1,10 @@
 ﻿using Disco.BI;
+using Disco.BI.DocumentTemplateBI.ManagedGroups;
 using Disco.BI.Extensions;
 using Disco.Models.Repository;
 using Disco.Services.Authorization;
+using Disco.Services.Interop.ActiveDirectory;
+using Disco.Services.Tasks;
 using Disco.Services.Users;
 using Disco.Services.Web;
 using System;
@@ -18,6 +21,8 @@ namespace Disco.Web.Areas.API.Controllers
         const string pDescription = "description";
         const string pScope = "scope";
         const string pFilterExpression = "filterexpression";
+        const string pOnGenerateExpression = "ongenerateexpression";
+        const string pOnImportAttachmentExpression = "onimportattachmentexpression";
         const string pFlattenForm = "flattenform";
 
         [DiscoAuthorize(Claims.Config.DocumentTemplate.Configure)]
@@ -29,7 +34,10 @@ namespace Disco.Web.Areas.API.Controllers
                     throw new ArgumentNullException("id");
                 if (string.IsNullOrEmpty(key))
                     throw new ArgumentNullException("key");
+                
+                ScheduledTaskStatus resultTask = null;
                 var documentTemplate = Database.DocumentTemplates.Find(id);
+                
                 if (documentTemplate != null)
                 {
                     switch (key.ToLower())
@@ -38,11 +46,17 @@ namespace Disco.Web.Areas.API.Controllers
                             UpdateDescription(documentTemplate, value);
                             break;
                         case pScope:
-                            UpdateScope(documentTemplate, value);
+                            resultTask = UpdateScope(documentTemplate, value);
                             break;
                         case pFilterExpression:
                             Authorization.Require(Claims.Config.DocumentTemplate.ConfigureFilterExpression);
                             UpdateFilterExpression(documentTemplate, value);
+                            break;
+                        case pOnGenerateExpression:
+                            UpdateOnGenerateExpression(documentTemplate, value);
+                            break;
+                        case pOnImportAttachmentExpression:
+                            UpdateOnImportAttachmentExpression(documentTemplate, value);
                             break;
                         case pFlattenForm:
                             UpdateFlattenForm(documentTemplate, value);
@@ -56,7 +70,15 @@ namespace Disco.Web.Areas.API.Controllers
                     throw new Exception("Invalid Document Template Id");
                 }
                 if (redirect)
-                    return RedirectToAction(MVC.Config.DocumentTemplate.Index(documentTemplate.Id));
+                    if (resultTask == null)
+                    {
+                        return RedirectToAction(MVC.Config.DocumentTemplate.Index(documentTemplate.Id));
+                    }
+                    else
+                    {
+                        resultTask.SetFinishedUrl(Url.Action(MVC.Config.DocumentTemplate.Index(documentTemplate.Id)));
+                        return RedirectToAction(MVC.Config.Logging.TaskStatus(resultTask.SessionId));
+                    }
                 else
                     return Json("OK", JsonRequestBehavior.AllowGet);
             }
@@ -127,6 +149,16 @@ namespace Disco.Web.Areas.API.Controllers
         {
             return Update(id, pFilterExpression, FilterExpression, redirect);
         }
+        [DiscoAuthorizeAll(Claims.Config.DocumentTemplate.Configure, Claims.Config.DocumentTemplate.ConfigureFilterExpression)]
+        public virtual ActionResult UpdateOnGenerateExpression(string id, string OnGenerateExpression = null, bool redirect = false)
+        {
+            return Update(id, pOnGenerateExpression, OnGenerateExpression, redirect);
+        }
+        [DiscoAuthorizeAll(Claims.Config.DocumentTemplate.Configure, Claims.Config.DocumentTemplate.ConfigureFilterExpression)]
+        public virtual ActionResult UpdateOnImportAttachmentExpression(string id, string OnImportAttachmentExpression = null, bool redirect = false)
+        {
+            return Update(id, pOnImportAttachmentExpression, OnImportAttachmentExpression, redirect);
+        }
         [DiscoAuthorize(Claims.Config.DocumentTemplate.Configure)]
         public virtual ActionResult UpdateFlattenForm(string id, string FlattenForm = null, bool redirect = false)
         {
@@ -138,7 +170,7 @@ namespace Disco.Web.Areas.API.Controllers
             return Update(id, pScope, Scope, redirect);
         }
         [DiscoAuthorize(Claims.Config.DocumentTemplate.Configure)]
-        public virtual ActionResult UpdateSubTypes(string id, List<string> SubTypes = null)
+        public virtual ActionResult UpdateJobSubTypes(string id, List<string> JobSubTypes = null, bool redirect = false)
         {
             try
             {
@@ -146,15 +178,87 @@ namespace Disco.Web.Areas.API.Controllers
                     throw new ArgumentNullException("id");
                 var documentTemplate = Database.DocumentTemplates.Find(id);
 
-                UpdateSubTypes(documentTemplate, SubTypes);
+                UpdateJobSubTypes(documentTemplate, JobSubTypes);
 
-                return Json("OK", JsonRequestBehavior.AllowGet);
+                if (redirect)
+                    return RedirectToAction(MVC.Config.DocumentTemplate.Index(documentTemplate.Id));
+                else
+                    return Json("OK", JsonRequestBehavior.AllowGet);
             }
             catch (Exception ex)
             {
-                return Json(string.Format("Error: {0}", ex.Message), JsonRequestBehavior.AllowGet);
+                if (redirect)
+                    throw;
+                else
+                    return Json(string.Format("Error: {0}", ex.Message), JsonRequestBehavior.AllowGet);
             }
 
+        }
+
+        [DiscoAuthorize(Claims.Config.DocumentTemplate.Configure)]
+        public virtual ActionResult UpdateDevicesLinkedGroup(string id, string GroupId = null, DateTime? FilterBeginDate = null, bool redirect = false)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(id))
+                    throw new ArgumentNullException("id");
+
+                var documentTemplate = Database.DocumentTemplates.Find(id);
+                if (documentTemplate == null)
+                    throw new ArgumentException("Invalid Document Template Id", "id");
+
+                var syncTaskStatus = UpdateDevicesLinkedGroup(documentTemplate, GroupId, FilterBeginDate);
+                if (redirect)
+                    if (syncTaskStatus == null)
+                        return RedirectToAction(MVC.Config.DocumentTemplate.Index(documentTemplate.Id));
+                    else
+                    {
+                        syncTaskStatus.SetFinishedUrl(Url.Action(MVC.Config.DocumentTemplate.Index(documentTemplate.Id)));
+                        return RedirectToAction(MVC.Config.Logging.TaskStatus(syncTaskStatus.SessionId));
+                    }
+                else
+                    return Json("OK", JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                if (redirect)
+                    throw;
+                else
+                    return Json(string.Format("Error: {0}", ex.Message), JsonRequestBehavior.AllowGet);
+            }
+        }
+
+        [DiscoAuthorize(Claims.Config.DocumentTemplate.Configure)]
+        public virtual ActionResult UpdateUsersLinkedGroup(string id, string GroupId = null, DateTime? FilterBeginDate = null, bool redirect = false)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(id))
+                    throw new ArgumentNullException("id");
+
+                var documentTemplate = Database.DocumentTemplates.Find(id);
+                if (documentTemplate == null)
+                    throw new ArgumentException("Invalid Document Template Id", "id");
+
+                var syncTaskStatus = UpdateUsersLinkedGroup(documentTemplate, GroupId, FilterBeginDate);
+                if (redirect)
+                    if (syncTaskStatus == null)
+                        return RedirectToAction(MVC.Config.DocumentTemplate.Index(documentTemplate.Id));
+                    else
+                    {
+                        syncTaskStatus.SetFinishedUrl(Url.Action(MVC.Config.DocumentTemplate.Index(documentTemplate.Id)));
+                        return RedirectToAction(MVC.Config.Logging.TaskStatus(syncTaskStatus.SessionId));
+                    }
+                else
+                    return Json("OK", JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                if (redirect)
+                    throw;
+                else
+                    return Json(string.Format("Error: {0}", ex.Message), JsonRequestBehavior.AllowGet);
+            }
         }
         #endregion
 
@@ -169,28 +273,38 @@ namespace Disco.Web.Areas.API.Controllers
             }
             throw new Exception("Invalid Description");
         }
-        private void UpdateScope(Disco.Models.Repository.DocumentTemplate documentTemplate, string Scope)
+        private ScheduledTaskStatus UpdateScope(Disco.Models.Repository.DocumentTemplate documentTemplate, string Scope)
         {
-            if (!string.IsNullOrWhiteSpace(Scope))
+            if (string.IsNullOrWhiteSpace(Scope) || !Disco.Models.Repository.DocumentTemplate.DocumentTemplateScopes.ToList().Contains(Scope))
+                throw new ArgumentException("Invalid Scope", "Scope");
+
+            Database.Configuration.LazyLoadingEnabled = true;
+
+            if (documentTemplate.Scope != Scope)
             {
-                if (Disco.Models.Repository.DocumentTemplate.DocumentTemplateScopes.ToList().Contains(Scope))
+
+                documentTemplate.Scope = Scope;
+
+                if (documentTemplate.Scope != Disco.Models.Repository.DocumentTemplate.DocumentTemplateScopes.Job &&
+                    documentTemplate.JobSubTypes != null)
                 {
-                    Database.Configuration.LazyLoadingEnabled = true;
-
-                    documentTemplate.Scope = Scope;
-
-                    if (documentTemplate.Scope != Disco.Models.Repository.DocumentTemplate.DocumentTemplateScopes.Job &&
-                        documentTemplate.JobSubTypes != null)
-                    {
-                        foreach (var st in documentTemplate.JobSubTypes.ToArray())
-                            documentTemplate.JobSubTypes.Remove(st);
-                    }
-
-                    Database.SaveChanges();
-                    return;
+                    foreach (var st in documentTemplate.JobSubTypes.ToArray())
+                        documentTemplate.JobSubTypes.Remove(st);
                 }
+
+                Database.SaveChanges();
+
+                // Trigger Managed Group Sync
+                var managedGroups = new ADManagedGroup[] {
+                    DocumentTemplateDevicesManagedGroup.Initialize(documentTemplate),
+                    DocumentTemplateUsersManagedGroup.Initialize(documentTemplate)
+                };
+
+                if (managedGroups.Any(mg => mg != null)) // Sync Group
+                    return ADManagedGroupsSyncTask.ScheduleSync(managedGroups.Where(mg => mg != null));
             }
-            throw new Exception("Invalid Scope");
+
+            return null;
         }
         private void UpdateFilterExpression(Disco.Models.Repository.DocumentTemplate documentTemplate, string FilterExpression)
         {
@@ -204,6 +318,36 @@ namespace Disco.Web.Areas.API.Controllers
             }
             // Invalidate Cache
             documentTemplate.FilterExpressionInvalidateCache();
+
+            Database.SaveChanges();
+        }
+        private void UpdateOnGenerateExpression(Disco.Models.Repository.DocumentTemplate documentTemplate, string OnGenerateExpression)
+        {
+            if (string.IsNullOrWhiteSpace(OnGenerateExpression))
+            {
+                documentTemplate.OnGenerateExpression = null;
+            }
+            else
+            {
+                documentTemplate.OnGenerateExpression = OnGenerateExpression.Trim();
+            }
+            // Invalidate Cache
+            documentTemplate.OnGenerateExpressionInvalidateCache();
+
+            Database.SaveChanges();
+        }
+        private void UpdateOnImportAttachmentExpression(Disco.Models.Repository.DocumentTemplate documentTemplate, string OnImportAttachmentExpression)
+        {
+            if (string.IsNullOrWhiteSpace(OnImportAttachmentExpression))
+            {
+                documentTemplate.OnImportAttachmentExpression = null;
+            }
+            else
+            {
+                documentTemplate.OnImportAttachmentExpression = OnImportAttachmentExpression.Trim();
+            }
+            // Invalidate Cache
+            documentTemplate.OnImportAttachmentExpressionInvalidateCache();
 
             Database.SaveChanges();
         }
@@ -224,7 +368,7 @@ namespace Disco.Web.Areas.API.Controllers
 
             Database.SaveChanges();
         }
-        private void UpdateSubTypes(Disco.Models.Repository.DocumentTemplate documentTemplate, List<string> SubTypes)
+        private void UpdateJobSubTypes(Disco.Models.Repository.DocumentTemplate documentTemplate, List<string> JobSubTypes)
         {
             Database.Configuration.LazyLoadingEnabled = true;
 
@@ -236,10 +380,10 @@ namespace Disco.Web.Areas.API.Controllers
             }
 
             // Add New
-            if (SubTypes != null && SubTypes.Count > 0)
+            if (JobSubTypes != null && JobSubTypes.Count > 0)
             {
                 var subTypes = new List<Disco.Models.Repository.JobSubType>();
-                foreach (var stId in SubTypes)
+                foreach (var stId in JobSubTypes)
                 {
                     var typeId = stId.Substring(0, stId.IndexOf("_"));
                     var subTypeId = stId.Substring(stId.IndexOf("_") + 1);
@@ -249,6 +393,40 @@ namespace Disco.Web.Areas.API.Controllers
                 documentTemplate.JobSubTypes = subTypes;
             }
             Database.SaveChanges();
+        }
+
+        private ScheduledTaskStatus UpdateDevicesLinkedGroup(DocumentTemplate DocumentTemplate, string DevicesLinkedGroup, DateTime? FilterBeginDate)
+        {
+            var configJson = ADManagedGroup.ValidConfigurationToJson(DocumentTemplateDevicesManagedGroup.GetKey(DocumentTemplate), DevicesLinkedGroup, FilterBeginDate);
+
+            if (DocumentTemplate.DevicesLinkedGroup != configJson)
+            {
+                DocumentTemplate.DevicesLinkedGroup = configJson;
+                Database.SaveChanges();
+
+                var managedGroup = DocumentTemplateDevicesManagedGroup.Initialize(DocumentTemplate);
+                if (managedGroup != null) // Sync Group
+                    return ADManagedGroupsSyncTask.ScheduleSync(managedGroup);
+            }
+
+            return null;
+        }
+
+        private ScheduledTaskStatus UpdateUsersLinkedGroup(DocumentTemplate DocumentTemplate, string UsersLinkedGroup, DateTime? FilterBeginDate)
+        {
+            var configJson = ADManagedGroup.ValidConfigurationToJson(DocumentTemplateUsersManagedGroup.GetKey(DocumentTemplate), UsersLinkedGroup, FilterBeginDate);
+
+            if (DocumentTemplate.UsersLinkedGroup != configJson)
+            {
+                DocumentTemplate.UsersLinkedGroup = configJson;
+                Database.SaveChanges();
+
+                var managedGroup = DocumentTemplateUsersManagedGroup.Initialize(DocumentTemplate);
+                if (managedGroup != null) // Sync Group
+                    return ADManagedGroupsSyncTask.ScheduleSync(managedGroup);
+            }
+
+            return null;
         }
         #endregion
 
@@ -273,15 +451,15 @@ namespace Disco.Web.Areas.API.Controllers
             var m = undetectedDirectory.GetFiles("*.pdf").Select(f => new Models.DocumentTemplate.ImporterUndetectedFilesModel()
             {
                 Id = System.IO.Path.GetFileNameWithoutExtension(f.Name),
-                Timestamp = f.CreationTime.ToString(),
-                TimestampFuzzy = f.CreationTime.ToFuzzy()
+                Timestamp = f.CreationTime.ToFullDateTime(),
+                TimestampUnixEpoc = f.CreationTime.ToUnixEpoc()
             }).ToArray();
 
             return Json(m);
         }
 
         [DiscoAuthorize(Claims.Config.DocumentTemplate.UndetectedPages)]
-        public virtual ActionResult ImporterUndetectedDataIdLookup(string id, string term, int limitCount = 20)
+        public virtual ActionResult ImporterUndetectedDataIdLookup(string id, string term, int limitCount = ActiveDirectory.DefaultSearchResultLimit)
         {
             if (!string.IsNullOrEmpty(id) && !string.IsNullOrWhiteSpace(term))
             {
@@ -318,13 +496,13 @@ namespace Disco.Web.Areas.API.Controllers
                     switch (searchScope)
                     {
                         case DocumentTemplate.DocumentTemplateScopes.Device:
-                            results = BI.DeviceBI.Searching.Search(Database, term, limitCount).Select(sr => Models.DocumentTemplate.ImporterUndetectedDataIdLookupModel.FromSearchResultItem(sr)).ToArray();
+                            results = Disco.Services.Searching.Search.SearchDevices(Database, term, limitCount).Select(sr => Models.DocumentTemplate.ImporterUndetectedDataIdLookupModel.FromSearchResultItem(sr)).ToArray();
                             break;
                         case DocumentTemplate.DocumentTemplateScopes.Job:
-                            results = BI.JobBI.Searching.Search(Database, term, limitCount, false).Items.Select(sr => Models.DocumentTemplate.ImporterUndetectedDataIdLookupModel.FromSearchResultItem(sr)).ToArray();
+                            results = Disco.Services.Searching.Search.SearchJobsTable(Database, term, limitCount, false).Items.Select(sr => Models.DocumentTemplate.ImporterUndetectedDataIdLookupModel.FromSearchResultItem(sr)).ToArray();
                             break;
                         case DocumentTemplate.DocumentTemplateScopes.User:
-                            results = BI.UserBI.Searching.Search(Database, term, limitCount).Select(sr => Models.DocumentTemplate.ImporterUndetectedDataIdLookupModel.FromSearchResultItem(sr)).ToArray();
+                            results = Disco.Services.Searching.Search.SearchUsers(Database, term, false, limitCount).Select(sr => Models.DocumentTemplate.ImporterUndetectedDataIdLookupModel.FromSearchResultItem(sr)).ToArray();
                             break;
                         default:
                             results = null;
@@ -333,7 +511,7 @@ namespace Disco.Web.Areas.API.Controllers
                     if (results != null)
                         return Json(results, JsonRequestBehavior.AllowGet);
                 }
-                
+
             }
             return Json(null, JsonRequestBehavior.AllowGet);
         }
@@ -380,7 +558,7 @@ namespace Disco.Web.Areas.API.Controllers
         {
             var undetectedLocation = DataStore.CreateLocation(Database, "DocumentDropBox_Unassigned");
             var filename = System.IO.Path.Combine(undetectedLocation, string.Concat(id, ".pdf"));
-            if (BI.Interop.Pdf.PdfImporter.ProcessPdfAttachment(filename, Database, DocumentTemplateId, DataId, UserService.CurrentUserId, DateTime.Now))
+            if (BI.Interop.Pdf.PdfImporter.ProcessPdfAttachment(filename, Database, DocumentTemplateId, DataId, UserService.CurrentUser.UserId, DateTime.Now))
             {
                 // Delete File
                 System.IO.File.Delete(filename);

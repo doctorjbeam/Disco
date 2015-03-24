@@ -1,0 +1,197 @@
+﻿@using Disco.Web.Models.Device;
+@using Disco.Models.Services.Devices;
+@model ExportModel
+@{
+    Authorization.RequireAny(Claims.Device.Actions.Export);
+
+    ViewBag.Title = Html.ToBreadcrumb("Devices", MVC.Device.Index(), "Export Devices");
+
+    var optionsMetadata = ModelMetadata.FromLambdaExpression(m => m.Options, ViewData);
+    var optionGroups = optionsMetadata.Properties.Where(p => p.ShortDisplayName != null && p.ModelType == typeof(bool))
+        .GroupBy(m => m.ShortDisplayName);
+}
+<div id="Devices_Export">
+    @using (Html.BeginForm(MVC.API.Device.Export()))
+    {
+        <div id="Devices_Export_Type" class="form" style="width: 570px">
+            <h2>Export Type</h2>
+            <table>
+                <tr>
+                    <th style="width: 150px">Type:
+                    </th>
+                    <td>
+                        @Html.DropDownListFor(m => m.Options.ExportType, Enum.GetNames(typeof(Disco.Models.Services.Devices.Exporting.DeviceExportTypes)).Select(t => new SelectListItem() { Text = t, Value = t }))
+                        <div id="Devices_Export_Type_Target_Batch" class="Devices_Export_Type_Target">
+                            @Html.DropDownListFor(m => m.Options.ExportTypeTargetId, Model.DeviceBatches.Select(i => new SelectListItem() { Value = i.Key.ToString(), Text = i.Value }))
+                        </div>
+                        <div id="Devices_Export_Type_Target_Model" class="Devices_Export_Type_Target">
+                            @Html.DropDownListFor(m => m.Options.ExportTypeTargetId, Model.DeviceModels.Select(i => new SelectListItem() { Value = i.Key.ToString(), Text = i.Value }))
+                        </div>
+                        <div id="Devices_Export_Type_Target_Profile" class="Devices_Export_Type_Target">
+                            @Html.DropDownListFor(m => m.Options.ExportTypeTargetId, Model.DeviceProfiles.Select(i => new SelectListItem() { Value = i.Key.ToString(), Text = i.Value }))
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <th>&nbsp;</th>
+                    <td>
+                        @Html.CheckBoxFor(m => m.Options.ExcelCsvFormat) <label for="Options_ExcelCsvFormat">Microsoft Excel CSV Format</label>
+                    </td>
+                </tr>
+            </table>
+        </div>
+        <div id="Devices_Export_Fields" class="form" style="width: 570px; margin-top: 15px;">
+            <h2>Export Fields <a id="Devices_Export_Fields_Defaults" href="#">(Defaults)</a></h2>
+            <table>
+                @foreach (var optionGroup in optionGroups)
+                {
+                    var optionFields = optionGroup.ToList();
+                    var itemsPerColumn = (int)Math.Ceiling((double)optionFields.Count / 2);
+                    <tr>
+                        <th style="width: 120px;">
+                            @optionGroup.Key
+                            @if (optionFields.Count > 2)
+                            {
+                                <span style="display: block;" class="select"><a class="selectAll" href="#">ALL</a> | <a class="selectNone" href="#">NONE</a></span>
+                            }
+                        </th>
+                        <td>
+                            <div class="Devices_Export_Fields_Group">
+                                <table class="none">
+                                    <tr>
+                                        <td style="width: 50%">
+                                            <ul class="none">
+                                                @foreach (var optionItem in optionFields.Take(itemsPerColumn))
+                                                {
+                                                    <li title="@optionItem.Description">
+                                                        <input type="checkbox" id="Options_@optionItem.PropertyName" name="Options.@optionItem.PropertyName" value="true" @(((bool)optionItem.Model) ? "checked " : null)/><label for="Options_@optionItem.PropertyName">@optionItem.DisplayName</label></li>
+                                                }
+                                            </ul>
+                                        </td>
+                                        <td style="width: 50%">
+                                            <ul class="none">
+                                                @foreach (var optionItem in optionFields.Skip(itemsPerColumn))
+                                                {
+                                                    <li title="@optionItem.Description">
+                                                        <input type="checkbox" id="Options_@optionItem.PropertyName" name="Options.@optionItem.PropertyName" value="true" @(((bool)optionItem.Model) ? "checked " : null)/><label for="Options_@optionItem.PropertyName">@optionItem.DisplayName</label></li>
+                                                }
+                                            </ul>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </td>
+                    </tr>            
+                }
+            </table>
+        </div>
+        <script>
+            $(function () {
+                var exportDefaultFields = ['DeviceSerialNumber', 'ModelId', 'ProfileId', 'BatchId', 'AssignedUserId', 'DeviceLocation', 'DeviceAssetNumber'];
+                var $exportFields = $('#Devices_Export_Fields');
+                var $exportType = $('#Options_ExportType');
+                var $exportTypeTargetContainers = $('#Devices_Export_Type').find('.Devices_Export_Type_Target');
+                var $form = $exportType.closest('form');
+                var $exportingDialog = null;
+
+                function exportTypeChange() {
+                    $exportTypeTargetContainers.hide();
+                    $exportTypeTargetContainers.find('select').prop('disabled', true);
+
+                    switch ($exportType.val()) {
+                        case 'Batch':
+                            $('#Devices_Export_Type_Target_Batch').show().find('select').prop('disabled', false);
+                            break;
+                        case 'Profile':
+                            $('#Devices_Export_Type_Target_Profile').show().find('select').prop('disabled', false);
+                            break;
+                        case 'Model':
+                            $('#Devices_Export_Type_Target_Model').show().find('select').prop('disabled', false);
+                            break;
+                    }
+                }
+                $exportType.change(exportTypeChange);
+                exportTypeChange();
+
+                $exportFields.on('click', 'a.selectAll,a.selectNone', function () {
+                    var $this = $(this);
+
+                    $this.closest('tr').find('input').prop('checked', $this.is('.selectAll'));
+
+                    return false;
+                });
+
+                $('#Devices_Export_Fields_Defaults').click(function () {
+
+                    $exportFields.find('input').prop('checked', false);
+
+                    $.each(exportDefaultFields, function (index, value) {
+                        $('#Options_' + value).prop('checked', true);
+                    });
+
+                    return false;
+                });
+
+                // Submit Validation
+                function submitHandler() {
+                    var exportFieldCount = $exportFields.find('input:checked').length;
+
+                    if (exportFieldCount > 0) {
+
+                        if ($exportingDialog == null) {
+                            $exportingDialog = $('#Devices_Export_Exporting').dialog({
+                                width: 400,
+                                height: 160,
+                                resizable: false,
+                                modal: true,
+                                autoOpen: false
+                            });
+                        }
+                        $exportingDialog.dialog('open');
+
+                        $form[0].submit();
+                    }
+                    else
+                        alert('Select at least one field to export.');
+                }
+                $.validator.unobtrusive.parse($form);
+                $form.data("validator").settings.submitHandler = submitHandler;
+
+                $('#Devices_Export_Download_Dialog').dialog({
+                    width: 400,
+                    resizable: false,
+                    modal: true,
+                    autoOpen: true
+                });
+                $('#Devices_Export_Button').click(function () {
+                    $form.submit();
+                });
+            });
+        </script>
+    }
+</div>
+@if (Model.ExportSessionId != null)
+{
+    <div id="Devices_Export_Download_Dialog" class="dialog" title="Export Devices">
+        <h4>@Model.ExportSessionResult.RecordCount record@(Model.ExportSessionResult.RecordCount != 1 ? "s" : null) were successfully exported.</h4>
+        <a href="@Url.Action(MVC.API.Device.ExportRetrieve(Model.ExportSessionId))" class="button"><i class="fa fa-download fa-lg"></i>Download Device Export</a>
+    </div>
+    <script>
+        $(function () {
+            $('#Devices_Export_Download_Dialog')
+                .dialog({
+                    width: 400,
+                    height: 160,
+                    resizable: false,
+                    modal: true,
+                    autoOpen: true
+                });
+        });
+    </script>
+}
+<div id="Devices_Export_Exporting" class="dialog" title="Exporting Devices...">
+    <h4><i class="fa fa-lg fa-cog fa-spin" title="Please Wait"></i>Exporting devices...</h4>
+</div>
+<div class="actionBar">
+    <a id="Devices_Export_Button" href="#" class="button">Export Devices</a>
+</div>

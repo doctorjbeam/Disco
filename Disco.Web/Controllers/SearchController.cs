@@ -1,5 +1,6 @@
 ﻿using Disco.Models.UI.Search;
 using Disco.Services.Authorization;
+using Disco.Services.Interop.ActiveDirectory;
 using Disco.Services.Plugins.Features.UIExtension;
 using Disco.Services.Users;
 using Disco.Services.Web;
@@ -62,13 +63,13 @@ namespace Disco.Web.Controllers
                     return View(m);
                 }
                 if (Authorization.Has(Claims.Job.Search))
-                    m.Jobs = BI.JobBI.Searching.Search(Database, term, null, true, searchDetails);
+                    m.Jobs = Services.Searching.Search.SearchJobsTable(Database, term, LimitCount: null, IncludeJobStatus: true, SearchDetails: searchDetails);
 
                 if (Authorization.Has(Claims.Device.Search))
-                    m.Devices = BI.DeviceBI.Searching.Search(Database, term, null, searchDetails);
+                    m.Devices = Services.Searching.Search.SearchDevices(Database, term, LimitCount: null, SearchDetails: searchDetails);
 
                 if (Authorization.Has(Claims.User.Search))
-                    m.Users = BI.UserBI.Searching.Search(Database, term);
+                    m.Users = Services.Searching.Search.SearchUsers(Database, term, true, LimitCount: null);
             }
             else
             {
@@ -83,7 +84,7 @@ namespace Disco.Web.Controllers
                             if (vm != null)
                             {
                                 m.FriendlyTerm = string.Format("Device Model: {0}", vm.ToString());
-                                m.Devices = BI.DeviceBI.Searching.SearchDeviceModel(Database, vm.Id);
+                                m.Devices = Services.Searching.Search.SearchDeviceModel(Database, vm.Id);
                                 break;
                             }
                         }
@@ -100,7 +101,7 @@ namespace Disco.Web.Controllers
                             if (dp != null)
                             {
                                 m.FriendlyTerm = string.Format("Device Profile: {0}", dp.ToString());
-                                m.Devices = BI.DeviceBI.Searching.SearchDeviceProfile(Database, dp.Id);
+                                m.Devices = Services.Searching.Search.SearchDeviceProfile(Database, dp.Id);
                                 break;
                             }
                         }
@@ -117,7 +118,7 @@ namespace Disco.Web.Controllers
                             if (db != null)
                             {
                                 m.FriendlyTerm = string.Format("Device Batch: {0}", db.ToString());
-                                m.Devices = BI.DeviceBI.Searching.SearchDeviceBatch(Database, db.Id);
+                                m.Devices = Services.Searching.Search.SearchDeviceBatch(Database, db.Id);
                                 break;
                             }
                         }
@@ -133,10 +134,10 @@ namespace Disco.Web.Controllers
                             m.ErrorMessage = "A search term of at least two characters is required";
                             return View(m);
                         }
-                        m.Devices = BI.DeviceBI.Searching.Search(Database, term, null, searchDetails);
+                        m.Devices = Services.Searching.Search.SearchDevices(Database, term, null, searchDetails);
                         if (m.Devices.Count == 1)
                         {
-                            return RedirectToAction(MVC.Device.Show(m.Devices[0].SerialNumber));
+                            return RedirectToAction(MVC.Device.Show(m.Devices[0].Id));
                         }
                         break;
                     case "jobs":
@@ -154,7 +155,7 @@ namespace Disco.Web.Controllers
                                 return RedirectToAction(MVC.Job.Show(termInt));
                             }
                         }
-                        m.Jobs = BI.JobBI.Searching.Search(Database, term, null, true, searchDetails);
+                        m.Jobs = Services.Searching.Search.SearchJobsTable(Database, term, LimitCount: null, IncludeJobStatus: true, SearchDetails: searchDetails);
                         break;
                     case "users":
                         Authorization.Require(Claims.User.Search);
@@ -164,7 +165,7 @@ namespace Disco.Web.Controllers
                             m.ErrorMessage = "A search term of at least two characters is required";
                             return View(m);
                         }
-                        m.Users = BI.UserBI.Searching.Search(Database, term);
+                        m.Users = Services.Searching.Search.SearchUsers(Database, term, true, LimitCount: null);
                         if (m.Users.Count == 1)
                         {
                             return RedirectToAction(MVC.User.Show(m.Users[0].Id));
@@ -203,7 +204,10 @@ namespace Disco.Web.Controllers
                         }
                     case "userid":
                         Authorization.Require(Claims.User.Search);
-                        var user = Database.Users.FirstOrDefault(u => u.Id == term);
+
+                        term = ActiveDirectory.ParseDomainAccountId(term);
+
+                        var user = Database.Users.FirstOrDefault(u => u.UserId == term);
                         if (user != null)
                             return RedirectToAction(MVC.User.Show(term));
                         else
@@ -227,6 +231,23 @@ namespace Disco.Web.Controllers
                                 return View(m);
                             }
                         }
+                    case "userflag":
+                        Authorization.RequireAll(Claims.User.Search, Claims.User.ShowFlagAssignments);
+                        int flagId;
+                        if (int.TryParse(term, out flagId))
+                        {
+                            var flag = Database.UserFlags.Find(flagId);
+                            if (flag != null)
+                            {
+                                m.FriendlyTerm = string.Format("User Flag: {0}", flag.ToString());
+                                m.Users = Services.Searching.Search.SearchUserFlag(Database, flag.Id);
+                                break;
+                            }
+                        }
+                        m.FriendlyTerm = string.Format("User Flag: {0}", term);
+                        m.Success = false;
+                        m.ErrorMessage = "Invalid User Flag Id";
+                        break;
                 }
             }
 

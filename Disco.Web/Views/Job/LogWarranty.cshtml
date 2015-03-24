@@ -1,7 +1,7 @@
 ﻿@model Disco.Web.Models.Job.LogWarrantyModel
 @{
     Authorization.Require(Claims.Job.Actions.LogWarranty);
-    
+
     ViewBag.Title = Html.ToBreadcrumb("Jobs", MVC.Job.Index(), string.Format("Job: {0}", Model.Job.Id), MVC.Job.Show(Model.Job.Id), "Log Warranty");
 }
 @using (Html.BeginForm(MVC.Job.LogWarranty(), FormMethod.Post))
@@ -9,7 +9,7 @@
     @Html.ValidationSummary(true)
     @Html.HiddenFor(m => m.JobId)
     @Html.ValidationMessageFor(m => m.JobId)
-    <input type="hidden" name="WarrantyAction" value="Disclose" />
+    <input type="hidden" name="SubmissionAction" value="@(Model.IsManualProvider ? "Manual" : "Disclose")" />
     <div id="warrantyJobForm" class="form" style="width: 650px">
         <table>
             <tr>
@@ -50,10 +50,6 @@
                 <td>
                     @Html.DropDownListFor(model => model.OrganisationAddressId, Model.OrganisationAddresses.ToSelectListItems(Model.OrganisationAddressId, (Model.OrganisationAddress == null)))<br />
                     @Html.ValidationMessageFor(m => m.OrganisationAddressId)
-                    <div id="organisationAddressDetailsLoading" style="display: none">
-                        <img src="@(Links.ClientSource.Style.Images.Status.loading_gif)" alt="Loading" />
-                        <span class="smallMessage">Loading Details...</span>
-                    </div>
                     <div id="organisationAddressDetails">
                         @{
     var oa = Model.OrganisationAddress;
@@ -73,10 +69,35 @@
                 <th>Warranty Provider:
                 </th>
                 <td>
-                    @Html.DropDownListFor(model => model.WarrantyProviderId, Model.WarrantyProviders.ToSelectListItems(Model.WarrantyProviderId, true))<br />
+                    @Html.DropDownListFor(model => model.WarrantyProviderId, Model.WarrantyProviders.ToSelectListItems(Model.WarrantyProviderId, AdditionalItems: new Dictionary<string, string>() { { "MANUAL", "<Manually Submitted Claim>" } }))<br />
                     @Html.ValidationMessageFor(m => m.WarrantyProviderId)
+                    @if (Model.WarrantyProviders.Count == 0 && Authorization.Has(Claims.Config.Plugin.Install))
+                    {
+                        <div class="info-box">
+                            <p class="fa-p">
+                                <i class="fa fa-info-circle"></i>View the <a href="@(Url.Action(MVC.Config.Plugins.Install()))">Plugin Catalogue</a> to discover and install warranty provider plugins.
+                            </p>
+                        </div>
+                    }
                 </td>
             </tr>
+            @if (Model.IsManualProvider)
+            {
+                <tr>
+                    <th>Provider Name:</th>
+                    <td>
+                        @Html.EditorFor(model => model.ManualProviderName)<br />
+                        @Html.ValidationMessageFor(m => m.ManualProviderName)
+                    </td>
+                </tr>
+                <tr>
+                    <th>Provider Job Reference:</th>
+                    <td>
+                        @Html.EditorFor(model => model.ManualProviderReference)<br />
+                        @Html.ValidationMessageFor(m => m.ManualProviderReference)
+                    </td>
+                </tr>
+            }
         </table>
     </div>
     <div id="warrantyJobFaultDescription" class="form" style="width: 650px; margin-top: 15px;">
@@ -90,34 +111,85 @@
             </tr>
         </table>
     </div>
-    if (Model.WarrantyProvider != null && Model.WarrantyProviderSubmitJobViewType != null)
-    { 
+            if (!Model.IsManualProvider && Authorization.Has(Claims.Job.ShowAttachments) && Model.Job.JobAttachments.Count > 0)
+            {
+    <div class="form" style="width: 650px; margin-top: 15px;">
+        <h2>Send Attachments</h2>
+        <table>
+            <tr>
+                <td>
+                    <div id="publishJobAttachments">
+                        @foreach (var ja in Model.Job.JobAttachments)
+                        {
+                            <a href="@Url.Action(MVC.API.Job.AttachmentDownload(ja.Id))" data-attachmentid="@ja.Id" data-mimetype="@ja.MimeType">
+                                <input type="checkbox" class="select" name="PublishAttachmentIds" value="@ja.Id" @(Model.PublishAttachmentIds.Contains(ja.Id) ? "checked" : null) />
+                                <span class="icon" title="@ja.Filename">
+                                    <img alt="Attachment Thumbnail" src="@(Url.Action(MVC.API.Job.AttachmentThumbnail(ja.Id)))" /></span>
+                                <span class="comments" title="@ja.Comments">
+                                    @{if (!string.IsNullOrEmpty(ja.DocumentTemplateId))
+                                      { @ja.DocumentTemplate.Description}
+                                      else
+                                      { @ja.Comments }}
+                                </span><span class="author">@ja.TechUser.ToStringFriendly()</span><span class="timestamp" data-livestamp="@(ja.Timestamp.ToUnixEpoc())" title="@ja.Timestamp.ToFullDateTime()">@ja.Timestamp.ToFullDateTime()</span>
+                            </a>   
+                        }
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+            }
+            if (Model.WarrantyProvider != null && Model.WarrantyProviderSubmitJobViewType != null)
+            { 
     <div id="warrantyJobProviderProperties">
         @Html.PartialCompiled(Model.WarrantyProviderSubmitJobViewType, Model.WarrantyProviderSubmitJobModel)
     </div>
-    }
+            }
     <div class="actionBar">
-        <input type="submit" class="button" value="Preview Warranty Claim" />
+        @if (Model.IsManualProvider)
+        {
+            <input type="submit" class="button" value="Save Warranty Claim" />
+        }
+        else
+        {
+            <input type="submit" class="button" value="Preview Warranty Claim" />
+        }
     </div>
 }
 <script type="text/javascript">
     $(function () {
+        var $providerId = $('#WarrantyProviderId');
+        var $addressId = $('#OrganisationAddressId');
 
-        var $organisationAddressDetails = $('#organisationAddressDetails');
-        var $organisationAddressDetailsLoading = $('#organisationAddressDetailsLoading');
-        var $OrganisationAddressId = $('#OrganisationAddressId');
-
-        var $ProviderId = $('#WarrantyProviderId');
-
-        var updateProviderDetails = function () {
-            var providerId = $ProviderId.val();
-            var orgAddressId = $OrganisationAddressId.val();
-
-            if (providerId) {
-                window.location.href = '@(Url.Action(MVC.Job.LogWarranty(Model.JobId, null, null)))?WarrantyProviderId=' + providerId + '&OrganisationAddressId=' + orgAddressId;
-            }
+        function updateDetails() {
+            $('<form>').attr({
+                action: $providerId.closest('form').attr('action'),
+                method: 'post'
+            }).append(
+                $('<input>').attr({ type: 'hidden', name: 'SubmissionAction', value: 'Update' })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'JobId', value: $('#JobId').val() })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'WarrantyProviderId', value: $providerId.val() })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'OrganisationAddressId', value: $addressId.val() })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'FaultDescription', value: $('#FaultDescription').val() })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'ManualProviderName', value: $('#ManualProviderName').val() })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'ManualProviderReference', value: $('#ManualProviderReference').val() })
+            ).appendTo('body').submit();
         }
-        $OrganisationAddressId.change(updateProviderDetails);
-        $ProviderId.change(updateProviderDetails);
+
+        $providerId.change(updateDetails);
+        $addressId.change(updateDetails);
+
+        var manualProvider = $('#ManualProviderName');
+        if (manualProvider.length > 0 && !manualProvider.val()) {
+            manualProvider.focus();
+        } else {
+            $('#FaultDescription').focus();
+        }
     });
 </script>

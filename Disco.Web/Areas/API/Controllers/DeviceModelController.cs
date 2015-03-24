@@ -2,6 +2,7 @@
 using Disco.Models.Repository;
 using Disco.Services.Authorization;
 using Disco.Services.Plugins;
+using Disco.Services.Plugins.Features.RepairProvider;
 using Disco.Services.Plugins.Features.WarrantyProvider;
 using Disco.Services.Web;
 using System;
@@ -18,6 +19,7 @@ namespace Disco.Web.Areas.API.Controllers
         const string pDescription = "description";
         const string pDefaultPurchaseDate = "defaultpurchasedate";
         const string pDefaultWarrantyProvider = "defaultwarrantyprovider";
+        const string pDefaultRepairProvider = "defaultrepairprovider";
 
         [DiscoAuthorize(Claims.Config.DeviceModel.Configure)]
         public virtual ActionResult Update(int id, string key, string value = null, bool redirect = false)
@@ -43,6 +45,9 @@ namespace Disco.Web.Areas.API.Controllers
                             break;
                         case pDefaultWarrantyProvider:
                             UpdateDefaultWarrantyProvider(deviceModel, value);
+                            break;
+                        case pDefaultRepairProvider:
+                            UpdateDefaultRepairProvider(deviceModel, value);
                             break;
                         default:
                             throw new Exception("Invalid Update Key");
@@ -84,6 +89,12 @@ namespace Disco.Web.Areas.API.Controllers
         public virtual ActionResult UpdateDefaultWarrantyProvider(int id, string DefaultWarrantyProvider = null, bool redirect = false)
         {
             return Update(id, pDefaultWarrantyProvider, DefaultWarrantyProvider, redirect);
+        }
+
+        [DiscoAuthorize(Claims.Config.DeviceModel.Configure)]
+        public virtual ActionResult UpdateDefaultRepairProvider(int id, string DefaultRepairProvider = null, bool redirect = false)
+        {
+            return Update(id, pDefaultRepairProvider, DefaultRepairProvider, redirect);
         }
 
         #endregion
@@ -128,6 +139,20 @@ namespace Disco.Web.Areas.API.Controllers
                 // Validate
                 var WarrantyProvider = Plugins.GetPluginFeature(DefaultWarrantyProvider, typeof(WarrantyProviderFeature));
                 deviceModel.DefaultWarrantyProvider = WarrantyProvider.Id;
+            }
+            Database.SaveChanges();
+        }
+        private void UpdateDefaultRepairProvider(Disco.Models.Repository.DeviceModel deviceModel, string DefaultRepairProvider)
+        {
+            if (string.IsNullOrEmpty(DefaultRepairProvider))
+            {
+                deviceModel.DefaultRepairProvider = null;
+            }
+            else
+            {
+                // Validate
+                var RepairProvider = Plugins.GetPluginFeature(DefaultRepairProvider, typeof(RepairProviderFeature));
+                deviceModel.DefaultRepairProvider = RepairProvider.Id;
             }
             Database.SaveChanges();
         }
@@ -353,24 +378,6 @@ namespace Disco.Web.Areas.API.Controllers
         {
             var deviceModels = Database.DeviceModels.ToArray().Select(dm => Models.DeviceModel._DeviceModel.FromDeviceModel(dm)).ToArray();
             return Json(deviceModels, JsonRequestBehavior.AllowGet);
-        }
-        #endregion
-
-        #region Exporting
-        [DiscoAuthorizeAll(Claims.Config.DeviceModel.Show, Claims.Device.Actions.Export)]
-        public virtual ActionResult ExportDevices(int id)
-        {
-            DeviceModel dm = Database.DeviceModels.Find(id);
-            if (dm == null)
-                throw new ArgumentNullException("id", "Invalid Device Model Id");
-
-            var devices = Database.Devices.Where(d => !d.DecommissionedDate.HasValue && d.DeviceModelId == dm.Id);
-
-            var export = BI.DeviceBI.Importing.Export.GenerateExport(devices);
-
-            var filename = string.Format("DiscoDeviceExport-Model_{0}-{1:yyyyMMdd-HHmmss}.csv", dm.Id, DateTime.Now);
-
-            return File(export, "text/csv", filename);
         }
         #endregion
 

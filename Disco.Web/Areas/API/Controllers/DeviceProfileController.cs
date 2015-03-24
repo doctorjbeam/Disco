@@ -1,16 +1,17 @@
 ﻿using Disco.BI.Extensions;
 using Disco.Models.Repository;
 using Disco.Services.Authorization;
+using Disco.Services.Devices.ManagedGroups;
+using Disco.Services.Interop.ActiveDirectory;
+using Disco.Services.Tasks;
 using Disco.Services.Web;
 using System;
-using System.Linq;
 using System.Web.Mvc;
 
 namespace Disco.Web.Areas.API.Controllers
 {
     public partial class DeviceProfileController : AuthorizedDatabaseController
     {
-
         const string pDescription = "description";
         const string pName = "name";
         const string pShortName = "shortname";
@@ -24,6 +25,8 @@ namespace Disco.Web.Areas.API.Controllers
         const string pProvisionADAccount = "provisionadaccount";
         const string pAssignedUserLocalAdmin = "assigneduserlocaladmin";
         const string pAllowUntrustedReimageJobEnrolment = "allowuntrustedreimagejobrnrolment";
+        const string pDevicesLinkedGroup = "deviceslinkedgroup";
+        const string pAssignedUsersLinkedGroup = "assigneduserslinkedgroup";
 
         [DiscoAuthorize(Claims.Config.DeviceProfile.Configure)]
         public virtual ActionResult Update(int id, string key, string value = null, Nullable<bool> redirect = null)
@@ -81,6 +84,12 @@ namespace Disco.Web.Areas.API.Controllers
                         case pAllowUntrustedReimageJobEnrolment:
                             UpdateAllowUntrustedReimageJobEnrolment(deviceProfile, value);
                             break;
+                        case pDevicesLinkedGroup:
+                            UpdateDevicesLinkedGroup(deviceProfile, value);
+                            break;
+                        case pAssignedUsersLinkedGroup:
+                            UpdateAssignedUsersLinkedGroup(deviceProfile, value);
+                            break;
                         default:
                             throw new Exception("Invalid Update Key");
                     }
@@ -90,7 +99,7 @@ namespace Disco.Web.Areas.API.Controllers
                     throw new Exception("Invalid Device Profile Number");
                 }
                 if (redirect.HasValue && redirect.Value)
-                    return RedirectToAction(MVC.Config.DeviceModel.Index(deviceProfile.Id));
+                    return RedirectToAction(MVC.Config.DeviceProfile.Index(deviceProfile.Id));
                 else
                     return Json("OK", JsonRequestBehavior.AllowGet);
             }
@@ -182,6 +191,71 @@ namespace Disco.Web.Areas.API.Controllers
         {
             return Update(id, pAllowUntrustedReimageJobEnrolment, AllowUntrustedReimageJobEnrolment, redirect);
         }
+
+        [DiscoAuthorize(Claims.Config.DeviceProfile.Configure)]
+        public virtual ActionResult UpdateDevicesLinkedGroup(int id, string GroupId = null, bool redirect = false)
+        {
+            try
+            {
+                if (id < 0)
+                    throw new ArgumentOutOfRangeException("id");
+
+                var deviceProfile = Database.DeviceProfiles.Find(id);
+                if (deviceProfile == null)
+                    throw new ArgumentException("Invalid Device Profile Id", "id");
+
+                var syncTaskStatus = UpdateDevicesLinkedGroup(deviceProfile, GroupId);
+                if (redirect)
+                    if (syncTaskStatus == null)
+                        return RedirectToAction(MVC.Config.DeviceProfile.Index(deviceProfile.Id));
+                    else
+                    {
+                        syncTaskStatus.SetFinishedUrl(Url.Action(MVC.Config.DeviceProfile.Index(deviceProfile.Id)));
+                        return RedirectToAction(MVC.Config.Logging.TaskStatus(syncTaskStatus.SessionId));
+                    }
+                else
+                    return Json("OK", JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                if (redirect)
+                    throw;
+                else
+                    return Json(string.Format("Error: {0}", ex.Message), JsonRequestBehavior.AllowGet);
+            }
+        }
+        [DiscoAuthorize(Claims.Config.DeviceProfile.Configure)]
+        public virtual ActionResult UpdateAssignedUsersLinkedGroup(int id, string GroupId = null, bool redirect = false)
+        {
+            try
+            {
+                if (id < 0)
+                    throw new ArgumentOutOfRangeException("id");
+
+                var deviceProfile = Database.DeviceProfiles.Find(id);
+                if (deviceProfile == null)
+                    throw new ArgumentException("Invalid Device Profile Id", "id");
+
+                var syncTaskStatus = UpdateAssignedUsersLinkedGroup(deviceProfile, GroupId);
+                if (redirect)
+                    if (syncTaskStatus == null)
+                        return RedirectToAction(MVC.Config.DeviceProfile.Index(deviceProfile.Id));
+                    else
+                    {
+                        syncTaskStatus.SetFinishedUrl(Url.Action(MVC.Config.DeviceProfile.Index(deviceProfile.Id)));
+                        return RedirectToAction(MVC.Config.Logging.TaskStatus(syncTaskStatus.SessionId));
+                    }
+                else
+                    return Json("OK", JsonRequestBehavior.AllowGet);
+            }
+            catch (Exception ex)
+            {
+                if (redirect)
+                    throw;
+                else
+                    return Json(string.Format("Error: {0}", ex.Message), JsonRequestBehavior.AllowGet);
+            }
+        }
         #endregion
 
         #region Update Properties
@@ -245,11 +319,13 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateOrganisationalUnit(Disco.Models.Repository.DeviceProfile deviceProfile, string OrganisationalUnit)
         {
             if (string.IsNullOrWhiteSpace(OrganisationalUnit))
-                OrganisationalUnit = null;
+                OrganisationalUnit = ActiveDirectory.Context.PrimaryDomain.DefaultComputerContainer;
 
-            deviceProfile.OrganisationalUnit = OrganisationalUnit;
-
-            Database.SaveChanges();
+            if (OrganisationalUnit != deviceProfile.OrganisationalUnit)
+            {
+                deviceProfile.OrganisationalUnit = OrganisationalUnit;
+                Database.SaveChanges();
+            }
         }
 
         private void UpdateComputerNameTemplate(Disco.Models.Repository.DeviceProfile deviceProfile, string ComputerNameTemplate)
@@ -362,14 +438,41 @@ namespace Disco.Web.Areas.API.Controllers
             }
             throw new Exception("Invalid Boolean Value");
         }
-        #endregion
 
-        [DiscoAuthorize(Claims.Config.DeviceProfile.Configure)]
-        public virtual ActionResult OrganisationalUnits()
+        private ScheduledTaskStatus UpdateDevicesLinkedGroup(DeviceProfile DeviceProfile, string DevicesLinkedGroup)
         {
-            var OUs = BI.Interop.ActiveDirectory.ActiveDirectory.GetOrganisationalUnitStructure();
-            return Json(OUs, JsonRequestBehavior.AllowGet);
+            var configJson = ADManagedGroup.ValidConfigurationToJson(DeviceProfileDevicesManagedGroup.GetKey(DeviceProfile), DevicesLinkedGroup, null);
+
+            if (DeviceProfile.DevicesLinkedGroup != configJson)
+            {
+                DeviceProfile.DevicesLinkedGroup = configJson;
+                Database.SaveChanges();
+
+                var managedGroup = DeviceProfileDevicesManagedGroup.Initialize(DeviceProfile);
+                if (managedGroup != null) // Sync Group
+                    return ADManagedGroupsSyncTask.ScheduleSync(managedGroup);
+            }
+
+            return null;
         }
+
+        private ScheduledTaskStatus UpdateAssignedUsersLinkedGroup(DeviceProfile DeviceProfile, string AssignedUsersLinkedGroup)
+        {
+            var configJson = ADManagedGroup.ValidConfigurationToJson(DeviceProfileAssignedUsersManagedGroup.GetKey(DeviceProfile), AssignedUsersLinkedGroup, null);
+
+            if (DeviceProfile.AssignedUsersLinkedGroup != configJson)
+            {
+                DeviceProfile.AssignedUsersLinkedGroup = configJson;
+                Database.SaveChanges();
+
+                var managedGroup = DeviceProfileAssignedUsersManagedGroup.Initialize(DeviceProfile);
+                if (managedGroup != null) // Sync Group
+                    return ADManagedGroupsSyncTask.ScheduleSync(managedGroup);
+            }
+
+            return null;
+        }
+        #endregion
 
         #region Actions
 
@@ -463,24 +566,6 @@ namespace Disco.Web.Areas.API.Controllers
             }
         }
 
-        #endregion
-
-        #region Exporting
-        [DiscoAuthorizeAll(Claims.Config.DeviceProfile.Show, Claims.Device.Actions.Export)]
-        public virtual ActionResult ExportDevices(int id)
-        {
-            DeviceProfile dp = Database.DeviceProfiles.Find(id);
-            if (dp == null)
-                throw new ArgumentNullException("id", "Invalid Device Profile Id");
-
-            var devices = Database.Devices.Where(d => !d.DecommissionedDate.HasValue && d.DeviceProfileId == dp.Id);
-
-            var export = BI.DeviceBI.Importing.Export.GenerateExport(devices);
-
-            var filename = string.Format("DiscoDeviceExport-Profile_{0}-{1:yyyyMMdd-HHmmss}.csv", dp.Id, DateTime.Now);
-
-            return File(export, "text/csv", filename);
-        }
         #endregion
 
     }

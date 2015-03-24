@@ -1,0 +1,195 @@
+﻿@model Disco.Web.Models.Job.LogRepairModel
+@{
+    Authorization.Require(Claims.Job.Actions.LogRepair);
+
+    ViewBag.Title = Html.ToBreadcrumb("Jobs", MVC.Job.Index(), string.Format("Job: {0}", Model.Job.Id), MVC.Job.Show(Model.Job.Id), "Log Repair");
+}
+@using (Html.BeginForm(MVC.Job.LogRepair(), FormMethod.Post))
+{
+    @Html.ValidationSummary(true)
+    @Html.HiddenFor(m => m.JobId)
+    @Html.ValidationMessageFor(m => m.JobId)
+    <input type="hidden" name="SubmissionAction" value="@(Model.IsManualProvider ? "Manual" : "Disclose")" />
+    <div id="repairJobForm" class="form" style="width: 650px">
+        <table>
+            <tr>
+                <th>Internal Job Id:
+                </th>
+                <td>
+                    @Model.JobId
+                </td>
+            </tr>
+            <tr>
+                <th>Device Serial Number:
+                </th>
+                <td>
+                    @Model.Job.Device.SerialNumber
+                </td>
+            </tr>
+            <tr>
+                <th>Device Model:
+                </th>
+                <td>
+                    @Model.Job.Device.DeviceModel.Manufacturer @Model.Job.Device.DeviceModel.Model
+                </td>
+            </tr>
+            <tr>
+                <th>Technician:
+                </th>
+                <td>
+                    @Model.TechUser.DisplayName
+                    <div class="smallMessage">
+                        Email Address: @Model.TechUser.EmailAddress<br />
+                        Phone Number: @Model.TechUser.PhoneNumber
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <th style="width: 150px">Repair Address:
+                </th>
+                <td>
+                    @Html.DropDownListFor(model => model.OrganisationAddressId, Model.OrganisationAddresses.ToSelectListItems(Model.OrganisationAddressId, (Model.OrganisationAddress == null)))<br />
+                    @Html.ValidationMessageFor(m => m.OrganisationAddressId)
+                    <div id="organisationAddressDetails">
+                        @{
+    var oa = Model.OrganisationAddress;
+    if (oa != null)
+    {
+                            <span>@oa.Address</span>
+                            <br />
+                            <span>@oa.Suburb, @oa.Postcode</span>
+                            <br />
+                            <span>@oa.State, @oa.Country</span>
+    }
+                        }
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <th>Repair Provider:
+                </th>
+                <td>
+                    @Html.DropDownListFor(model => model.RepairProviderId, Model.RepairProviders.ToSelectListItems(Model.RepairProviderId, AdditionalItems: new Dictionary<string, string>() { { "MANUAL", "<Manually Submitted Request>" } }))<br />
+                    @Html.ValidationMessageFor(m => m.RepairProviderId)
+                    @if (Model.RepairProviders.Count == 0 && Authorization.Has(Claims.Config.Plugin.Install))
+                    {
+                        <div class="info-box">
+                            <p class="fa-p">
+                                <i class="fa fa-info-circle"></i>View the <a href="@(Url.Action(MVC.Config.Plugins.Install()))">Plugin Catalogue</a> to discover and install repair provider plugins.
+                            </p>
+                        </div>
+                    }
+                </td>
+            </tr>
+            @if (Model.IsManualProvider)
+            {
+                <tr>
+                    <th>Provider Name:</th>
+                    <td>
+                        @Html.EditorFor(model => model.ManualProviderName)<br />
+                        @Html.ValidationMessageFor(m => m.ManualProviderName)
+                    </td>
+                </tr>
+                <tr>
+                    <th>Provider Job Reference:</th>
+                    <td>
+                        @Html.EditorFor(model => model.ManualProviderReference)<br />
+                        @Html.ValidationMessageFor(m => m.ManualProviderReference)
+                    </td>
+                </tr>
+            }
+        </table>
+    </div>
+    <div id="repairJobRepairDescription" class="form" style="width: 650px; margin-top: 15px;">
+        <h2>Repair Description</h2>
+        <table>
+            <tr>
+                <td>
+                    @Html.EditorFor(model => model.RepairDescription)<br />
+                    @Html.ValidationMessageFor(m => m.RepairDescription)
+                </td>
+            </tr>
+        </table>
+    </div>
+            if (!Model.IsManualProvider && Authorization.Has(Claims.Job.ShowAttachments) && Model.Job.JobAttachments.Count > 0)
+            {
+    <div class="form" style="width: 650px; margin-top: 15px;">
+        <h2>Send Attachments</h2>
+        <table>
+            <tr>
+                <td>
+                    <div id="publishJobAttachments">
+                        @foreach (var ja in Model.Job.JobAttachments)
+                        {
+                            <a href="@Url.Action(MVC.API.Job.AttachmentDownload(ja.Id))" data-attachmentid="@ja.Id" data-mimetype="@ja.MimeType">
+                                <input type="checkbox" class="select" name="PublishAttachmentIds" value="@ja.Id" @(Model.PublishAttachmentIds.Contains(ja.Id) ? "checked" : null) />
+                                <span class="icon" title="@ja.Filename">
+                                    <img alt="Attachment Thumbnail" src="@(Url.Action(MVC.API.Job.AttachmentThumbnail(ja.Id)))" /></span>
+                                <span class="comments" title="@ja.Comments">
+                                    @{if (!string.IsNullOrEmpty(ja.DocumentTemplateId))
+                                      { @ja.DocumentTemplate.Description}
+                                      else
+                                      { @ja.Comments }}
+                                </span><span class="author">@ja.TechUser.ToStringFriendly()</span><span class="timestamp" data-livestamp="@(ja.Timestamp.ToUnixEpoc())" title="@ja.Timestamp.ToFullDateTime()">@ja.Timestamp.ToFullDateTime()</span>
+                            </a>   
+                        }
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+            }
+            if (Model.RepairProvider != null && Model.RepairProviderSubmitJobBeginResult != null)
+            { 
+    <div id="repairJobProviderProperties">
+        @Html.PartialCompiled(Model.RepairProviderSubmitJobBeginResult.Item1, Model.RepairProviderSubmitJobBeginResult.Item2)
+    </div>
+            }
+    <div class="actionBar">
+        @if (Model.IsManualProvider)
+        {
+            <input type="submit" class="button" value="Save Repair Request" />
+        }
+        else
+        {
+            <input type="submit" class="button" value="Preview Repair Request" />
+        }
+    </div>
+}
+<script type="text/javascript">
+    $(function () {
+        var $providerId = $('#RepairProviderId');
+        var $addressId = $('#OrganisationAddressId');
+
+        function updateDetails() {
+            $('<form>').attr({
+                action: $providerId.closest('form').attr('action'),
+                method: 'post'
+            }).append(
+                $('<input>').attr({ type: 'hidden', name: 'SubmissionAction', value: 'Update' })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'JobId', value: $('#JobId').val() })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'RepairProviderId', value: $providerId.val() })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'OrganisationAddressId', value: $addressId.val() })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'RepairDescription', value: $('#RepairDescription').val() })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'ManualProviderName', value: $('#ManualProviderName').val() })
+            ).append(
+                $('<input>').attr({ type: 'hidden', name: 'ManualProviderReference', value: $('#ManualProviderReference').val() })
+            ).appendTo('body').submit();
+        }
+
+        $providerId.change(updateDetails);
+        $addressId.change(updateDetails);
+
+        var manualProvider = $('#ManualProviderName');
+        if (manualProvider.length > 0 && !manualProvider.val()) {
+            manualProvider.focus();
+        } else {
+            $('#RepairDescription').focus();
+        }
+    });
+</script>

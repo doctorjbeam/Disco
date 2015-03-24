@@ -1,9 +1,10 @@
+using Disco.Data.Repository;
+using Exceptionless;
+using Quartz;
+using Quartz.Impl.Triggers;
 using System;
 using System.IO;
 using System.Web.Caching;
-using Disco.Data.Repository;
-using Quartz;
-using Quartz.Impl.Triggers;
 
 namespace Disco.BI.DocumentTemplateBI.Importer
 {
@@ -28,12 +29,12 @@ namespace Disco.BI.DocumentTemplateBI.Importer
             if (!string.IsNullOrEmpty(friendlyFilename))
                 friendlyFilename = System.IO.Path.GetFileName(friendlyFilename);
 
-            DocumentImporterLog.LogImportStarting(sessionId, friendlyFilename);
+            DocumentsLog.LogImportStarting(sessionId, friendlyFilename);
 
             if (!File.Exists(filename))
             {
-                DocumentImporterLog.LogImportWarning(sessionId, string.Format("File not found: {0}", filename));
-                DocumentImporterLog.LogImportFinished(sessionId);
+                DocumentsLog.LogImportWarning(sessionId, string.Format("File not found: {0}", filename));
+                DocumentsLog.LogImportFinished(sessionId);
                 context.Scheduler.DeleteJob(context.JobDetail.Key);
                 return;
             }
@@ -69,8 +70,9 @@ namespace Disco.BI.DocumentTemplateBI.Importer
                                     }
                                     File.Move(filename, filenameError);
                                 }
-                                catch
+                                catch (Exception ex)
                                 {
+                                    ex.ToExceptionless().Submit();
                                     // Ignore Errors
                                 }
                             }
@@ -79,7 +81,7 @@ namespace Disco.BI.DocumentTemplateBI.Importer
                     else
                     {
                         // To Many Errors
-                        DocumentImporterLog.LogImportError(sessionId, string.Format("To many errors occurred trying to import '{1}' (SessionId: {0})", sessionId, friendlyFilename));
+                        DocumentsLog.LogImportError(sessionId, string.Format("To many errors occurred trying to import '{1}' (SessionId: {0})", sessionId, friendlyFilename));
                         // Move to Errors Folder
                         if (File.Exists(filename))
                         {
@@ -101,14 +103,15 @@ namespace Disco.BI.DocumentTemplateBI.Importer
                         }
                     }
                 }
-                DocumentImporterLog.LogImportFinished(sessionId);
+                DocumentsLog.LogImportFinished(sessionId);
 
                 // All Done
                 context.Scheduler.DeleteJob(context.JobDetail.Key);
             }
             catch (Exception ex)
             {
-                DocumentImporterLog.LogImportWarning(sessionId, string.Format("{0}; Will try again in 10 Seconds", ex.Message));
+                ex.ToExceptionless().Submit();
+                DocumentsLog.LogImportWarning(sessionId, string.Format("{0}; Will try again in 10 Seconds", ex.Message));
                 // Reschedule Job for 10 seconds
                 SimpleTriggerImpl trig = new SimpleTriggerImpl(Guid.NewGuid().ToString(), new DateTimeOffset(DateTime.Now.AddSeconds(10)));
                 context.Scheduler.RescheduleJob(context.Trigger.Key, trig);

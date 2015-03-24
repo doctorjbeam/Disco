@@ -1,7 +1,7 @@
 ﻿@model Disco.Web.Areas.Config.Models.Shared.LogEventsModel
 @{
     Authorization.Require(Claims.Config.Logging.Show);
-    
+
     Html.BundleDeferred("~/ClientScripts/Modules/Knockout");
     Html.BundleDeferred("~/ClientScripts/Modules/jQuery-SignalR");
     var uniqueId = Guid.NewGuid().ToString("N");
@@ -29,8 +29,7 @@
         <table class="logEventsViewport" data-bind="visible: EventLogs().length > 0" style="display: none">
             <tbody data-bind="foreach: EventLogs">
                 <tr>
-                    <td class="icon" data-bind="css: {information: EventTypeSeverity == 0, warning: EventTypeSeverity == 1, error: EventTypeSeverity == 2}">&nbsp;
-                    </td>
+                    <td class="icon"><i class="fa" data-bind="css: {'fa-info-circle': EventTypeSeverity == 0, 'fa-exclamation-triangle': EventTypeSeverity == 1, 'fa-exclamation-circle': EventTypeSeverity == 2}"></i></td>
                     <td class="timestamp" data-bind="text: FormattedTimestamp"></td>
                     <td class="eventType" data-bind="text: EventTypeName, attr: {title: ModuleDescription}"></td>
                     <td class="message" data-bind="text: FormattedMessage, attr: {title: $parent.LogArguments($data)}"></td>
@@ -45,12 +44,12 @@
         $(function () {
             var logEventsHost = $('LogEvents_@(uniqueId)');
             var logModuleId = '@(Model.ModuleFilter != null ? Model.ModuleFilter.ModuleId.ToString() : null)';
-            var logModuleLiveGroupName = '@(Model.ModuleFilter != null ? Model.ModuleFilter.LiveLogGroupName : Disco.BI.Interop.SignalRHandlers.LogNotifications.AllNotifications)';
-            var logEventTypeFiltered = @(eventTypesFilterJson);
+            var logModuleLiveGroupName = '@(Model.ModuleFilter != null ? Model.ModuleFilter.LiveLogGroupName : Disco.Services.Logging.LogNotificationsHub.AllLoggingNotification)';
+            var logEventTypeFiltered = @(eventTypesFilterJson); 
             var logStartFiler = @(AjaxHelpers.JsonDate(Model.StartFilter));
             var logEndFiler = @(AjaxHelpers.JsonDate(Model.EndFilter));
             var logTakeFiler = '@(Model.TakeFilter)';
-            var liveConnection = null;
+            var logHub = null;
             var liveEventReceivedFunction = '@(Model.JavascriptLiveEventFunctionName)';
             var useLive = ('True'==='@(Model.IsLive)');
 
@@ -90,7 +89,7 @@
                     dataType: 'json',
                     type: 'POST',
                     data: loadData,
-                    success: function (d) {
+                    success: function (d) { 
                         initLogs(d);
                     },
                     error: function (jqXHR, textStatus, errorThrown) {
@@ -114,16 +113,41 @@
                         }
                     }
 
-                    liveConnection = $.connection('@(Url.Content("~/API/Logging/Notifications"))', {addToGroups: logModuleLiveGroupName});
-                    liveConnection.received(logReceived);
-                    liveConnection.error(function(e){if (e.status != 200) alert('Live-Log Error: '+e.statusText +': '+e.responseText);});
-                    liveConnection.start();
-                }
-            }
+                    logHub = $.connection.logNotifications;
+                    logHub.client.receiveLog = function(message){
+                        if (message.UseDisplay) logsViewModel.EventLogs.unshift(message);
+                        if (liveEventReceivedFunction) liveEventReceivedFunction(message);
+                    };
 
-            function logReceived(log){
-                if (log.UseDisplay) logsViewModel.EventLogs.unshift(log);
-                if (liveEventReceivedFunction) liveEventReceivedFunction(log);
+                    $.connection.hub.qs = {LogModules: logModuleLiveGroupName};
+                    $.connection.hub.error(onHubFailed);
+
+                    $.connection.hub.start().fail(onHubFailed);
+
+                    function onHubFailed(error) {
+                        // Show Dialog Message
+                        if ($('.disconnected-dialog').length == 0) {
+                            $('<div>')
+                                .addClass('dialog disconnected-dialog')
+                                .html('<h3><span class="fa-stack fa-lg"><i class="fa fa-wifi fa-stack-1x"></i><i class="fa fa-ban fa-stack-2x error"></i></span>Disconnected from the Disco ICT Server</h3><div>This page is not receiving live updates. Please ensure you are connected to the server, then refresh this page to enable features.</div>')
+                                .dialog({
+                                    resizable: false,
+                                    title: 'Disconnected',
+                                    width: 400,
+                                    modal: true,
+                                    buttons: {
+                                        'Refresh Now': function () {
+                                            $(this).dialog('option', 'buttons', null);
+                                            window.location.reload(true);
+                                        },
+                                        'Close': function () {
+                                            $(this).dialog('destroy');
+                                        }
+                                    }
+                                });
+                        }
+                    }
+                }
             }
 
             loadInitialData();

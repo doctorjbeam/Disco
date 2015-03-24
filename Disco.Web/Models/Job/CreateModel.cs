@@ -1,10 +1,12 @@
-﻿using System;
+﻿using Disco.BI.Extensions;
+using Disco.Data.Repository;
+using Disco.Models.UI.Job;
+using Disco.Services.Authorization;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Web;
-using Disco.Data.Repository;
-using Disco.Models.UI.Job;
 
 namespace Disco.Web.Models.Job
 {
@@ -25,7 +27,7 @@ namespace Disco.Web.Models.Job
         [Required(ErrorMessage = "Please specify whether the device is held or not")]
         public bool? DeviceHeld { get; set; }
 
-        public string QuickLogDestinationUrl { get; set; }
+        public string SourceUrl { get; set; }
 
         [Display(Description = "Automatically close this job")]
         public bool? QuickLog { get; set; }
@@ -37,13 +39,11 @@ namespace Disco.Web.Models.Job
         public Disco.Models.Repository.Device Device { get; set; }
         public Disco.Models.Repository.User User { get; set; }
         public List<Disco.Models.Repository.JobType> JobTypes { get; set; }
-        public List<Disco.Models.Repository.JobSubType> JobSubTypes { get; set; }
-        public void UpdateModel(DiscoDataContext Database)
+
+        public void UpdateModel(DiscoDataContext Database, AuthorizationToken Authorization)
         {
             if (this.JobTypes == null)
-                JobTypes = Database.JobTypes.ToList();
-            if (this.JobSubTypes == null)
-                JobSubTypes = Database.JobSubTypes.ToList();
+                this.JobTypes = Database.JobTypes.Include("JobSubTypes.JobQueues").FilterCreatableTypePermissions(Authorization).ToList();
 
             if (!string.IsNullOrEmpty(DeviceSerialNumber))
             {
@@ -57,7 +57,7 @@ namespace Disco.Web.Models.Job
                     this.UserId = this.Device.AssignedUserId;
                 }
                 if (string.IsNullOrEmpty(this.Type))
-                    this.Type = this.JobTypes.First(jt => jt.Id == Disco.Models.Repository.JobType.JobTypeIds.HWar).Id;
+                    this.Type = this.JobTypes.Any(jt => jt.Id == Disco.Models.Repository.JobType.JobTypeIds.HWar) ? Disco.Models.Repository.JobType.JobTypeIds.HWar : this.JobTypes.First().Id;
 
                 if (string.IsNullOrEmpty(this.UserId))
                 {
@@ -68,7 +68,6 @@ namespace Disco.Web.Models.Job
                         {
                             case Disco.Models.Repository.JobType.JobTypeIds.UMgmt:
                                 JobTypes.Remove(jobType);
-                                JobSubTypes.RemoveAll(jst => jst.JobType == jobType);
                                 break;
                             default:
                                 break;
@@ -88,7 +87,6 @@ namespace Disco.Web.Models.Job
                         case Disco.Models.Repository.JobType.JobTypeIds.HWar:
                         case Disco.Models.Repository.JobType.JobTypeIds.SImg:
                             JobTypes.Remove(jobType);
-                            JobSubTypes.RemoveAll(jst => jst.JobType == jobType);
                             break;
                         default:
                             break;
@@ -97,7 +95,7 @@ namespace Disco.Web.Models.Job
 
                 // Set Default Job Type for Users
                 if (string.IsNullOrEmpty(this.Type))
-                    this.Type = this.JobTypes.First(jt => jt.Id == Disco.Models.Repository.JobType.JobTypeIds.SApp).Id;
+                    this.Type = this.JobTypes.Any(jt => jt.Id == Disco.Models.Repository.JobType.JobTypeIds.SApp) ? Disco.Models.Repository.JobType.JobTypeIds.SApp : this.JobTypes.First().Id;
             }
             if (!string.IsNullOrEmpty(UserId))
             {
@@ -134,7 +132,7 @@ namespace Disco.Web.Models.Job
                 if (SubTypes != null)
                 {
                     var subTypes = this.SubTypes;
-                    return this.JobSubTypes.Where(m => subTypes.Contains(String.Format("{0}_{1}", m.JobTypeId, m.Id))).ToList();
+                    return this.JobTypes.SelectMany(jt => jt.JobSubTypes).Where(m => subTypes.Contains(String.Format("{0}_{1}", m.JobTypeId, m.Id))).ToList();
                 }
                 return null;
             }

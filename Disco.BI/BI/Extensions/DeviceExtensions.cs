@@ -1,5 +1,4 @@
 using System.Linq;
-using Disco.BI.Interop.ActiveDirectory;
 using Disco.Data.Configuration;
 using Disco.Data.Repository;
 using Disco.Models.BI.DocumentTemplates;
@@ -7,17 +6,21 @@ using Disco.Models.Repository;
 using System.Collections.Generic;
 using System;
 using System.IO;
-using Disco.Models.Interop.ActiveDirectory;
 using Disco.Services.Users;
 using Disco.Services.Authorization;
+using Disco.Services.Interop.ActiveDirectory;
+using Exceptionless;
 
 namespace Disco.BI.Extensions
 {
     public static class DeviceExtensions
     {
 
-        public static string ComputerNameRender(this Device device, DiscoDataContext Database)
+        public static string ComputerNameRender(this Device device, DiscoDataContext Database, ADDomain Domain)
         {
+            if (Domain == null)
+                throw new ArgumentNullException("Domain");
+
             DeviceProfile deviceProfile = device.DeviceProfile;
             Expressions.Expression computerNameTemplateExpression = null;
             computerNameTemplateExpression = Expressions.ExpressionCache.GetValue(DeviceProfileExtensions.ComputerNameExpressionCacheModule, deviceProfile.Id.ToString(), () =>
@@ -34,13 +37,15 @@ namespace Disco.BI.Extensions
             }
             catch (Exception ex)
             {
+                ex.ToExceptionless().AddObject(deviceProfile.ComputerNameTemplate, "ComputerNameTemplate").Submit();
                 throw new InvalidOperationException(string.Format("An error occurred rendering the computer name: [{0}] {1}", ex.GetType().Name, ex.Message), ex.InnerException);
             }
             if (rendered == null || rendered.Length > 24)
             {
                 throw new System.InvalidOperationException("The rendered computer name would be invalid or longer than 24 characters");
             }
-            return rendered.ToString();
+
+            return string.Format(@"{0}\{1}", Domain.NetBiosName, rendered);
         }
         public static System.Collections.Generic.List<DocumentTemplate> AvailableDocumentTemplates(this Device d, DiscoDataContext Database, User User, System.DateTime TimeStamp)
         {
@@ -52,18 +57,18 @@ namespace Disco.BI.Extensions
 
         public static bool UpdateLastNetworkLogonDate(this Device Device)
         {
-            return ActiveDirectoryUpdateLastNetworkLogonDateJob.UpdateLastNetworkLogonDate(Device);
+            return Disco.Services.Interop.ActiveDirectory.ADNetworkLogonDatesUpdateTask.UpdateLastNetworkLogonDate(Device);
         }
 
         public static DeviceAttachment CreateAttachment(this Device Device, DiscoDataContext Database, User CreatorUser, string Filename, string MimeType, string Comments, Stream Content, DocumentTemplate DocumentTemplate = null, byte[] PdfThumbnail = null)
         {
-            if (string.IsNullOrEmpty(MimeType) || MimeType.Equals("unknown/unknown", StringComparison.InvariantCultureIgnoreCase))
+            if (string.IsNullOrEmpty(MimeType) || MimeType.Equals("unknown/unknown", StringComparison.OrdinalIgnoreCase))
                 MimeType = Interop.MimeTypes.ResolveMimeType(Filename);
 
             DeviceAttachment da = new DeviceAttachment()
             {
                 DeviceSerialNumber = Device.SerialNumber,
-                TechUserId = CreatorUser.Id,
+                TechUserId = CreatorUser.UserId,
                 Filename = Filename,
                 MimeType = MimeType,
                 Timestamp = DateTime.Now,
@@ -139,7 +144,7 @@ namespace Disco.BI.Extensions
             Database.Devices.Add(d2);
             if (!string.IsNullOrEmpty(d.AssignedUserId))
             {
-                User u = UserService.GetUser(d.AssignedUserId, Database, true);
+                User u = UserService.GetUser(ActiveDirectory.ParseDomainAccountId(d.AssignedUserId), Database, true);
                 d2.AssignDevice(Database, u);
             }
 
@@ -160,12 +165,12 @@ namespace Disco.BI.Extensions
                 newDua = new DeviceUserAssignment()
                 {
                     DeviceSerialNumber = d.SerialNumber,
-                    AssignedUserId = u.Id,
+                    AssignedUserId = u.UserId,
                     AssignedDate = DateTime.Now
                 };
                 Database.DeviceUserAssignments.Add(newDua);
 
-                d.AssignedUserId = u.Id;
+                d.AssignedUserId = u.UserId;
                 d.AssignedUser = u;
             }
             else
@@ -174,53 +179,64 @@ namespace Disco.BI.Extensions
             }
 
             // Update AD Account
-            if (!string.IsNullOrEmpty(d.ComputerName) && d.ComputerName.Length <= 24)
+            if (ActiveDirectory.IsValidDomainAccountId(d.DeviceDomainId))
             {
-                var adMachineAccount = Interop.ActiveDirectory.ActiveDirectory.GetMachineAccount(d.ComputerName);
+                var adMachineAccount = ActiveDirectory.RetrieveADMachineAccount(d.DeviceDomainId);
                 if (adMachineAccount != null)
-                {
                     adMachineAccount.SetDescription(d);
-                }
             }
 
             return newDua;
         }
 
-        public static ActiveDirectoryMachineAccount ActiveDirectoryAccount(this Device Device, params string[] AdditionalProperties)
+        public static ADMachineAccount ActiveDirectoryAccount(this Device Device, params string[] AdditionalProperties)
         {
-            if (!string.IsNullOrEmpty(Device.ComputerName))
-                return Interop.ActiveDirectory.ActiveDirectory.GetMachineAccount(Device.ComputerName, AdditionalProperties: AdditionalProperties);
+            if (ActiveDirectory.IsValidDomainAccountId(Device.DeviceDomainId))
+                return ActiveDirectory.RetrieveADMachineAccount(Device.DeviceDomainId, AdditionalProperties: AdditionalProperties);
             else
                 return null;
         }
 
-        public static string ReasonMessage(this Disco.Models.Repository.Device.DecommissionReasons r)
+        public static string ReasonMessage(this Disco.Models.Repository.DecommissionReasons r)
         {
             switch (r)
             {
-                case Device.DecommissionReasons.EndOfLife:
+                case DecommissionReasons.EndOfLife:
                     return "End of Life";
-                case Device.DecommissionReasons.Sold:
+                case DecommissionReasons.Sold:
                     return "Sold";
-                case Device.DecommissionReasons.Stolen:
+                case DecommissionReasons.Stolen:
                     return "Stolen";
-                case Device.DecommissionReasons.Lost:
+                case DecommissionReasons.Lost:
                     return "Lost";
-                case Device.DecommissionReasons.Damaged:
+                case DecommissionReasons.Damaged:
                     return "Damaged";
-                case Device.DecommissionReasons.Donated:
+                case DecommissionReasons.Donated:
                     return "Donated";
+                case DecommissionReasons.Returned:
+                    return "Returned";
                 default:
                     return "Unknown";
             }
         }
 
-        public static string ReasonMessage(this Disco.Models.Repository.Device.DecommissionReasons? r)
+        public static string ReasonMessage(this Disco.Models.Repository.DecommissionReasons? r)
         {
             if (!r.HasValue)
                 return "Not Decommissioned";
 
             return r.Value.ReasonMessage();
+        }
+
+        public static string StatusCode(this Device Device)
+        {
+            if (Device.DecommissionedDate.HasValue)
+                return "Decommissioned";
+
+            if (!Device.EnrolledDate.HasValue)
+                return "NotEnrolled";
+
+            return "Active";
         }
 
         public static string Status(this Device Device)

@@ -104,6 +104,26 @@ namespace Disco.Web.Areas.Config
                 "Config/AuthorizationRole/{id}",
                 new { controller = "AuthorizationRole", action = "Index", id = UrlParameter.Optional }
             );
+            context.MapRoute(
+                "Config_JobQueue_Create",
+                "Config/JobQueue/Create",
+                new { controller = "JobQueue", action = "Create", id = UrlParameter.Optional }
+            );
+            context.MapRoute(
+                "Config_JobQueue",
+                "Config/JobQueue/{id}",
+                new { controller = "JobQueue", action = "Index", id = UrlParameter.Optional }
+            );
+            context.MapRoute(
+                "Config_UserFlag_Create",
+                "Config/UserFlag/Create",
+                new { controller = "UserFlag", action = "Create", id = UrlParameter.Optional }
+            );
+            context.MapRoute(
+                "Config_UserFlag",
+                "Config/UserFlag/{id}",
+                new { controller = "UserFlag", action = "Index", id = UrlParameter.Optional }
+            );
 
             context.MapRoute(
                 "Config_Plugins",

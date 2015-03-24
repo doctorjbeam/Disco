@@ -1,4 +1,5 @@
-﻿using Disco.BI.Extensions;
+﻿using Disco.BI.DocumentTemplateBI.ManagedGroups;
+using Disco.BI.Extensions;
 using Disco.Models.UI.Config.DocumentTemplate;
 using Disco.Services.Authorization;
 using Disco.Services.Plugins.Features.UIExtension;
@@ -28,10 +29,17 @@ namespace Disco.Web.Areas.Config.Controllers
             {
                 var m = new Models.DocumentTemplate.ShowModel()
                 {
-                    DocumentTemplate = Database.DocumentTemplates.Include("JobSubTypes").Where(at => at.Id == id).FirstOrDefault()
+                    DocumentTemplate = Database.DocumentTemplates.Include("JobSubTypes").FirstOrDefault(at => at.Id == id)
                 };
                 m.TemplateExpressions = m.DocumentTemplate.ExtractPdfExpressions(Database);
                 m.UpdateModel(Database);
+
+                DocumentTemplateDevicesManagedGroup devicesManagedGroup;
+                if (DocumentTemplateDevicesManagedGroup.TryGetManagedGroup(m.DocumentTemplate, out devicesManagedGroup))
+                    m.DevicesLinkedGroup = devicesManagedGroup;
+                DocumentTemplateUsersManagedGroup usersManagedGroup;
+                if (DocumentTemplateUsersManagedGroup.TryGetManagedGroup(m.DocumentTemplate, out usersManagedGroup))
+                    m.UsersLinkedGroup = usersManagedGroup;
 
                 // UI Extensions
                 UIExtensions.ExecuteExtensions<ConfigDocumentTemplateShowModel>(this.ControllerContext, m);

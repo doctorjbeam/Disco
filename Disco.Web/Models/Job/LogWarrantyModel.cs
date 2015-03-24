@@ -1,15 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Web;
-using Disco.Data.Repository;
-using System.ComponentModel.DataAnnotations;
-using Disco.BI;
-using System.Web.Script.Serialization;
+﻿using Disco.Data.Repository;
 using Disco.Services.Plugins;
 using Disco.Services.Plugins.Features.WarrantyProvider;
-using Newtonsoft.Json;
 using Disco.Services.Users;
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
 
 namespace Disco.Web.Models.Job
 {
@@ -21,6 +18,8 @@ namespace Disco.Web.Models.Job
         public List<Disco.Models.BI.Config.OrganisationAddress> OrganisationAddresses { get; set; }
         public Disco.Models.BI.Config.OrganisationAddress OrganisationAddress { get; set; }
 
+        public List<Disco.Models.Repository.JobAttachment> PublishAttachments { get; set; }
+
         public Disco.Models.Repository.User TechUser { get; set; }
 
         [Required]
@@ -31,20 +30,31 @@ namespace Disco.Web.Models.Job
         public string WarrantyProviderId { get; set; }
         [Required(ErrorMessage = "A fault description is required"), DataType(System.ComponentModel.DataAnnotations.DataType.MultilineText)]
         public string FaultDescription { get; set; }
+        public List<int> PublishAttachmentIds { get; set; }
         [Required]
-        public string WarrantyAction { get; set; }
+        public string SubmissionAction { get; set; }
+
+        public bool IsManualProvider
+        {
+            get
+            {
+                return WarrantyProviderId == "MANUAL";
+            }
+        }
+        public string ManualProviderName { get; set; }
+        public string ManualProviderReference { get; set; }
 
         public Type WarrantyProviderSubmitJobViewType { get; set; }
         public object WarrantyProviderSubmitJobModel { get; set; }
-        public string WarrantyProviderPropertiesJson { get; set; }
-        public Dictionary<string, string> WarrantyProviderProperties()
+        public string ProviderPropertiesJson { get; set; }
+        public Dictionary<string, string> ProviderProperties()
         {
             Dictionary<string, string> p = default(Dictionary<string, string>);
-            if (!string.IsNullOrEmpty(this.WarrantyProviderPropertiesJson))
+            if (!string.IsNullOrEmpty(this.ProviderPropertiesJson))
             {
                 try
                 {
-                    p = JsonConvert.DeserializeObject<Dictionary<string, string>>(this.WarrantyProviderPropertiesJson);
+                    p = JsonConvert.DeserializeObject<Dictionary<string, string>>(this.ProviderPropertiesJson);
                 }
                 catch (Exception)
                 {
@@ -74,13 +84,12 @@ namespace Disco.Web.Models.Job
                     } catch (Exception) {}
                 }
 
-                Job = (from j in Database.Jobs.Include("Device.DeviceModel").Include("JobMetaWarranty").Include("JobSubTypes")
-                       where (j.Id == JobId)
-                       select j).FirstOrDefault();
+                Job = Database.Jobs.Include("Device.DeviceModel").Include("JobMetaWarranty").Include("JobSubTypes").Include("JobAttachments")
+                    .Where(j => j.Id == JobId)
+                    .FirstOrDefault();
+
                 if (Job == null)
-                {
                     throw new ArgumentException("Invalid Job Number Specified", "JobId");
-                }
             }
 
             // Update TechUser's Details [#12]
@@ -91,12 +100,15 @@ namespace Disco.Web.Models.Job
             if (!IsPostBack && string.IsNullOrEmpty(WarrantyProviderId))
             {
                 WarrantyProviderId = Job.Device.DeviceModel.DefaultWarrantyProvider;
+
+                if (string.IsNullOrEmpty(WarrantyProviderId))
+                    WarrantyProviderId = "MANUAL";
             }
 
-            if (!string.IsNullOrEmpty(WarrantyProviderId))
+            if (!string.IsNullOrEmpty(WarrantyProviderId) && WarrantyProviderId != "MANUAL")
                 WarrantyProvider = Plugins.GetPluginFeature(WarrantyProviderId, typeof(WarrantyProviderFeature));
 
-            this.OrganisationAddresses = Database.DiscoConfiguration.OrganisationAddresses.Addresses;
+            this.OrganisationAddresses = Database.DiscoConfiguration.OrganisationAddresses.Addresses.OrderBy(a => a.Name).ToList();
 
             if (!IsPostBack && !this.OrganisationAddressId.HasValue)
             {
@@ -107,6 +119,16 @@ namespace Disco.Web.Models.Job
 
             if (!string.IsNullOrEmpty(FaultDescription))
                 FaultDescription = FaultDescription.Trim();
+
+            if (PublishAttachmentIds == null)
+            {
+                PublishAttachmentIds = new List<int>();
+                PublishAttachments = new List<Disco.Models.Repository.JobAttachment>();
+            }
+            else
+            {
+                PublishAttachments = Job.JobAttachments.Where(ja => PublishAttachmentIds.Contains(ja.Id)).ToList();
+            }
         }
     }
 }

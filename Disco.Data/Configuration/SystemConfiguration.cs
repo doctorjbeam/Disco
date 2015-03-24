@@ -1,13 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Disco.Data.Repository;
-using Disco.Models.Repository;
+﻿using Disco.Data.Repository;
+using Disco.Models.Services.Interop.DiscoServices;
+using System;
 using System.IO;
-using System.Security.Cryptography;
-using Disco.Models.BI.Interop.Community;
-using Newtonsoft.Json;
 
 namespace Disco.Data.Configuration
 {
@@ -21,6 +15,8 @@ namespace Disco.Data.Configuration
             this.moduleDeviceProfilesConfiguration = new Lazy<Modules.DeviceProfilesConfiguration>(() => new Modules.DeviceProfilesConfiguration(Database));
             this.moduleOrganisationAddressesConfiguration = new Lazy<Modules.OrganisationAddressesConfiguration>(() => new Modules.OrganisationAddressesConfiguration(Database));
             this.moduleJobPreferencesConfiguration = new Lazy<Modules.JobPreferencesConfiguration>(() => new Modules.JobPreferencesConfiguration(Database));
+            this.moduleActiveDirectoryConfiguration = new Lazy<Modules.ActiveDirectoryConfiguration>(() => new Modules.ActiveDirectoryConfiguration(Database));
+            this.moduleDevicesConfiguration = new Lazy<Modules.DevicesConfiguration>(() => new Modules.DevicesConfiguration(Database));
         }
 
         #region Configuration Modules
@@ -29,6 +25,8 @@ namespace Disco.Data.Configuration
         private Lazy<Modules.DeviceProfilesConfiguration> moduleDeviceProfilesConfiguration;
         private Lazy<Modules.OrganisationAddressesConfiguration> moduleOrganisationAddressesConfiguration;
         private Lazy<Modules.JobPreferencesConfiguration> moduleJobPreferencesConfiguration;
+        private Lazy<Modules.ActiveDirectoryConfiguration> moduleActiveDirectoryConfiguration;
+        private Lazy<Modules.DevicesConfiguration> moduleDevicesConfiguration;
 
         public Modules.BootstrapperConfiguration Bootstrapper
         {
@@ -56,6 +54,20 @@ namespace Disco.Data.Configuration
             get
             {
                 return moduleJobPreferencesConfiguration.Value;
+            }
+        }
+        public Modules.ActiveDirectoryConfiguration ActiveDirectory
+        {
+            get
+            {
+                return moduleActiveDirectoryConfiguration.Value;
+            }
+        }
+        public Modules.DevicesConfiguration Devices
+        {
+            get
+            {
+                return moduleDevicesConfiguration.Value;
             }
         }
 
@@ -91,6 +103,18 @@ namespace Disco.Data.Configuration
                 else
                     storePath = string.Concat(value, '\\');
                 this.Set(storePath);
+            }
+        }
+
+        public string Administrators
+        {
+            get
+            {
+                return this.Get<string>("Domain Admins,Disco Admins");
+            }
+            set
+            {
+                Set(value);
             }
         }
 
@@ -245,15 +269,22 @@ namespace Disco.Data.Configuration
                 return this.Get<string>(null);
             }
         }
-        public UpdateResponse UpdateLastCheck
+        public string DeploymentSecret
         {
             get
             {
-                return this.GetFromJson<UpdateResponse>(null);
+                return this.Get<string>(null);
+            }
+        }
+        public UpdateResponseV2 UpdateLastCheckResponse
+        {
+            get
+            {
+                return this.Get<UpdateResponseV2>(null);
             }
             set
             {
-                this.SetAsJson(value);
+                this.Set(value);
             }
         }
         public bool UpdateBetaDeployment

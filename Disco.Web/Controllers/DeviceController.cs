@@ -1,13 +1,19 @@
 ﻿using Disco.BI.Extensions;
 using Disco.Models.Repository;
+using Disco.Models.Services.Devices.Exporting;
+using Disco.Models.Services.Jobs.JobLists;
 using Disco.Models.UI.Device;
+using Disco.Services;
 using Disco.Services.Authorization;
+using Disco.Services.Devices.Exporting;
 using Disco.Services.Plugins;
 using Disco.Services.Plugins.Features.UIExtension;
 using Disco.Services.Users;
 using Disco.Services.Web;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Web;
 using System.Web.Mvc;
 
 
@@ -35,10 +41,10 @@ namespace Disco.Web.Controllers
             {
                 DefaultDeviceProfileId = Database.DiscoConfiguration.DeviceProfiles.DefaultAddDeviceOfflineDeviceProfileId
             };
-            
+
             if (Authorization.Has(Claims.Device.Properties.DeviceBatch))
                 m.DeviceBatches = Database.DeviceBatches.ToList();
-            
+
             if (Authorization.Has(Claims.Device.Properties.DeviceProfile))
             {
                 m.DeviceProfiles = Database.DeviceProfiles.ToList();
@@ -79,36 +85,106 @@ namespace Disco.Web.Controllers
         }
         #endregion
 
-        #region Import/Export
-        [DiscoAuthorizeAny(Claims.Device.Actions.Import, Claims.Device.Actions.Export), HttpGet]
-        public virtual ActionResult ImportExport()
-        {
-            Models.Device.ImportModel m = new Models.Device.ImportModel();
+        #region Export
 
-            if (Authorization.Has(Claims.Device.Actions.Import))
+        [DiscoAuthorizeAny(Claims.Device.Actions.Export), HttpGet]
+        public virtual ActionResult Export(string DownloadId, DeviceExportTypes? ExportType, int? ExportTypeTargetId)
+        {
+            var m = new Models.Device.ExportModel()
             {
-                m.DeviceModels = Database.DeviceModels.ToList();
-                m.DeviceProfiles = Database.DeviceProfiles.ToList();
-                m.DeviceBatches = Database.DeviceBatches.ToList();
+                Options = Database.DiscoConfiguration.Devices.LastExportOptions,
+                DeviceBatches = new KeyValuePair<int, string>[] { new KeyValuePair<int, string>(0, "<No Associated Batch>") }.Concat(Database.DeviceBatches.OrderBy(db => db.Name).Select(db => new { Key = db.Id, Value = db.Name }).ToList().Select(i => new KeyValuePair<int, string>(i.Key, i.Value))),
+                DeviceModels = Database.DeviceModels.OrderBy(dm => dm.Description).Select(dm => new { Key = dm.Id, Value = dm.Description }).ToList().Select(i => new KeyValuePair<int, string>(i.Key, i.Value)),
+                DeviceProfiles = Database.DeviceProfiles.OrderBy(dp => dp.Name).Select(dp => new { Key = dp.Id, Value = dp.Name }).ToList().Select(i => new KeyValuePair<int, string>(i.Key, i.Value))
+            };
+
+            if (!string.IsNullOrWhiteSpace(DownloadId))
+            {
+                string key = string.Format(Areas.API.Controllers.DeviceController.ExportSessionCacheKey, DownloadId);
+                var context = HttpRuntime.Cache.Get(key) as DeviceExportTaskContext;
+
+                if (context != null)
+                {
+                    m.ExportSessionResult = context.Result;
+                    m.ExportSessionId = DownloadId;
+                }
             }
+
+            if (ExportType.HasValue && ExportTypeTargetId.HasValue)
+            {
+                m.Options.ExportType = ExportType.Value;
+                m.Options.ExportTypeTargetId = ExportTypeTargetId.Value;
+            }
+
+            // UI Extensions
+            UIExtensions.ExecuteExtensions<DeviceExportModel>(this.ControllerContext, m);
+
+            return View(m);
+        }
+
+        #endregion
+
+        #region Import
+        [DiscoAuthorize(Claims.Device.Actions.Import), HttpGet]
+        public virtual ActionResult Import(string Id)
+        {
+            var m = new Models.Device.ImportModel()
+            {
+                DeviceModels = Database.DeviceModels.ToList(),
+                DeviceProfiles = Database.DeviceProfiles.ToList(),
+                DeviceBatches = Database.DeviceBatches.ToList()
+            };
+
+            if (!string.IsNullOrWhiteSpace(Id))
+                m.CompletedImportSessionContext = Areas.API.Controllers.DeviceController.Import_RetrieveContext(Id, Remove: true);
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<DeviceImportModel>(this.ControllerContext, m);
 
             return View(m);
         }
+
         [DiscoAuthorize(Claims.Device.Actions.Import), HttpGet]
-        public virtual ActionResult ImportReview(string ImportParseTaskId)
+        public virtual ActionResult ImportHeaders(string Id)
         {
-            if (string.IsNullOrWhiteSpace(ImportParseTaskId))
-                throw new ArgumentNullException("ImportParseTaskId");
+            if (string.IsNullOrWhiteSpace(Id))
+                throw new ArgumentNullException("Id");
 
-            var session = Disco.BI.DeviceBI.Importing.Import.GetSession(ImportParseTaskId);
+            var context = Areas.API.Controllers.DeviceController.Import_RetrieveContext(Id);
 
-            if (session == null)
-                throw new ArgumentException("The Import Parse Task Id is invalid or the session timed out (60 minutes), try importing again", "ImportParseTaskId");
+            if (context == null)
+                throw new ArgumentException("The Import Session Id is invalid or the session timed out (60 minutes), try importing again", "Id");
 
-            Models.Device.ImportReviewModel m = Models.Device.ImportReviewModel.FromImportDeviceSession(session);
+            var m = new Models.Device.ImportHeadersModel()
+            {
+                Context = context
+            };
+
+            // UI Extensions
+            UIExtensions.ExecuteExtensions<DeviceImportHeadersModel>(this.ControllerContext, m);
+
+            return View(m);
+        }
+
+        [DiscoAuthorize(Claims.Device.Actions.Import), HttpGet]
+        public virtual ActionResult ImportReview(string Id)
+        {
+            if (string.IsNullOrWhiteSpace(Id))
+                throw new ArgumentNullException("Id");
+
+            var context = Areas.API.Controllers.DeviceController.Import_RetrieveContext(Id);
+
+            if (context == null)
+                throw new ArgumentException("The Import Session Id is invalid or the session timed out (60 minutes), try importing again", "Id");
+
+            var m = new Models.Device.ImportReviewModel()
+            {
+                Context = context,
+                StatisticErrorRecords = context.Records.Count(r => r.HasError),
+                StatisticNewRecords = context.Records.Count(r => r.RecordAction == System.Data.EntityState.Added),
+                StatisticModifiedRecords = context.Records.Count(r => r.RecordAction == System.Data.EntityState.Modified),
+                StatisticUnmodifiedRecords = context.Records.Count(r => r.RecordAction == System.Data.EntityState.Unchanged)
+            };
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<DeviceImportReviewModel>(this.ControllerContext, m);
@@ -126,7 +202,9 @@ namespace Disco.Web.Controllers
             Database.Configuration.LazyLoadingEnabled = true;
 
             m.Device = Database.Devices
-                .Include("DeviceModel").Include("DeviceDetails").Include("DeviceUserAssignments.AssignedUser").Include("DeviceAttachments")
+                .Include("DeviceModel").Include("DeviceProfile").Include("DeviceBatch").Include("DeviceDetails")
+                .Include("DeviceUserAssignments.AssignedUser.UserFlagAssignments").Include("AssignedUser.UserFlagAssignments").Include("DeviceCertificates")
+                .Include("DeviceAttachments.TechUser").Include("DeviceAttachments.DocumentTemplate")
                 .FirstOrDefault(d => d.SerialNumber == id);
 
             if (m.Device == null)
@@ -150,7 +228,7 @@ namespace Disco.Web.Controllers
 
             if (Authorization.Has(Claims.Device.ShowJobs))
             {
-                m.Jobs = new Disco.Models.BI.Job.JobTableModel()
+                m.Jobs = new JobTableModel()
                 {
                     ShowStatus = true,
                     ShowDevice = false,
@@ -158,7 +236,7 @@ namespace Disco.Web.Controllers
                     HideClosedJobs = true,
                     EnablePaging = false
                 };
-                m.Jobs.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.DeviceSerialNumber == m.Device.SerialNumber).OrderByDescending(j => j.Id));
+                m.Jobs.Fill(Database, Disco.Services.Searching.Search.BuildJobTableModel(Database).Where(j => j.DeviceSerialNumber == m.Device.SerialNumber).OrderByDescending(j => j.Id), true);
             }
 
             if (Authorization.Has(Claims.Device.ShowCertificates))

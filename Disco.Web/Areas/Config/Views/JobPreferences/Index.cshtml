@@ -11,36 +11,7 @@
         Html.BundleDeferred("~/ClientScripts/Modules/Disco-PropertyChangeHelpers");
         Html.BundleDeferred("~/ClientScripts/Modules/Disco-AjaxHelperIcons");
     }
+    Html.RenderPartial(MVC.Config.JobPreferences.Views.Parts.General);
+    Html.RenderPartial(MVC.Config.JobPreferences.Views.Parts.Reports);
+    Html.RenderPartial(MVC.Config.JobPreferences.Views.Parts.Locations);
 }
-<div class="form" style="width: 530px;">
-    <h2>General Preferences</h2>
-    <table>
-        <tr>
-            <th style="width: 200px">Long Running Threshold:
-            </th>
-            <td>@if (canConfig)
-                {
-                @Html.DropDownListFor(model => model.LongRunningJobDaysThreshold, Model.LongRunningJobDaysThresholdOptions().Select(o => new SelectListItem() { Value = o.Key.ToString(), Text = o.Value }))
-                @AjaxHelpers.AjaxSave()
-                @AjaxHelpers.AjaxLoader()
-                <script type="text/javascript">
-                    $(function () {
-                        document.DiscoFunctions.PropertyChangeHelper(
-                            $('#LongRunningJobDaysThreshold'),
-                            null,
-                            '@(Url.Action(MVC.API.JobPreferences.UpdateLongRunningJobDaysThreshold()))',
-                            'LongRunningJobDaysThreshold');
-                    });
-                </script>
-                }
-                else
-                {
-                @Model.LongRunningJobDaysThresholdOptions().First(o => o.Key == Model.LongRunningJobDaysThreshold).Value
-                }
-                <div class="smallMessage">
-                    Jobs which have been open for longer than the threshold are considered 'long-running' and will appear in the <code>Long Running Jobs</code> list.
-                </div>
-            </td>
-        </tr>
-    </table>
-</div>

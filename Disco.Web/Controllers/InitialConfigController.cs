@@ -10,6 +10,10 @@ using System.Text.RegularExpressions;
 using System.IO.Compression;
 using System.Management;
 using System.Web;
+using Disco.Services.Users;
+using Disco.Services.Interop.ActiveDirectory;
+using Disco.Services.Authorization;
+using Disco.Web.Areas.API.Models.Shared;
 
 namespace Disco.Web.Controllers
 {
@@ -67,9 +71,6 @@ namespace Disco.Web.Controllers
             }
             base.OnActionExecuting(filterContext);
         }
-
-        //
-        // GET: /Install/
 
         public virtual ActionResult Index()
         {
@@ -204,53 +205,39 @@ namespace Disco.Web.Controllers
         {
             if (ModelState.IsValid)
             {
-                // Ensure Path Exists
                 using (DiscoDataContext database = new DiscoDataContext())
                 {
-                    var configItem = database.ConfigurationItems.Where(ci => ci.Scope == "System" && ci.Key == "DataStoreLocation").FirstOrDefault();
-                    if (configItem == null)
-                    { // Create Config
-                        database.ConfigurationItems.Add(new Disco.Models.Repository.ConfigurationItem()
-                        {
-                            Scope = "System",
-                            Key = "DataStoreLocation",
-                            Value = m.FileStoreLocation
-                        });
-                    }
-                    else
-                    { // Update Config
-                        configItem.Value = m.FileStoreLocation;
-                    }
+                    database.DiscoConfiguration.DataStoreLocation = m.FileStoreLocation;
                     database.SaveChanges();
+
+                    // Extract DataStore Template into FileStore
+                    var templatePath = Server.MapPath("~/ClientBin/DataStoreTemplate.zip");
+                    if (System.IO.File.Exists(templatePath))
+                    {
+                        try
+                        {
+                            using (ZipArchive templateArchive = ZipFile.Open(templatePath, ZipArchiveMode.Read))
+                            {
+                                foreach (var entry in templateArchive.Entries)
+                                {
+                                    var entryDestinationPath = Path.Combine(m.FileStoreLocation, entry.FullName);
+                                    if (System.IO.File.Exists(entryDestinationPath))
+                                        System.IO.File.Delete(entryDestinationPath);
+                                }
+                                templateArchive.ExtractToDirectory(m.FileStoreLocation);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            ModelState.AddModelError(string.Empty, string.Format("Unable to extract File Store template: [{0}] {1}", ex.GetType().Name, ex.Message));
+                        }
+                    }
+
+                    // Initialize Core Environment
+                    AppConfig.InitalizeCoreEnvironment(database);
                 }
 
-                // Extract DataStore Template into FileStore
-                var templatePath = Server.MapPath("~/ClientBin/DataStoreTemplate.zip");
-                if (System.IO.File.Exists(templatePath))
-                {
-                    try
-                    {
-                        using (ZipArchive templateArchive = ZipFile.Open(templatePath, ZipArchiveMode.Read))
-                        {
-                            foreach (var entry in templateArchive.Entries)
-                            {
-                                var entryDestinationPath = Path.Combine(m.FileStoreLocation, entry.FullName);
-                                if (System.IO.File.Exists(entryDestinationPath))
-                                    System.IO.File.Delete(entryDestinationPath);
-                            }
-                            templateArchive.ExtractToDirectory(m.FileStoreLocation);
-                        }
-                        return RedirectToAction(MVC.InitialConfig.Complete());
-                    }
-                    catch (Exception ex)
-                    {
-                        ModelState.AddModelError(string.Empty, string.Format("Unable to extract File Store template: [{0}] {1}", ex.GetType().Name, ex.Message));
-                    }
-                }
-                else
-                {
-                    return RedirectToAction(MVC.InitialConfig.Complete());
-                }
+                return RedirectToAction(MVC.InitialConfig.Administrators());
             }
 
             m.ExpandDirectoryModel();
@@ -261,6 +248,89 @@ namespace Disco.Web.Controllers
         {
             return Json(FileStoreModel.FileStoreDirectoryModel.FromPath(Path, true), JsonRequestBehavior.AllowGet);
         }
+        #endregion
+
+        #region Administrators
+
+        public virtual ActionResult Administrators()
+        {
+            var administratorSubjects = UserService.AdministratorSubjectIds
+                .Select(subjectId => ActiveDirectory.RetrieveADObject(subjectId, Quick: true))
+                .Where(item => item != null)
+                .Select(item => SubjectDescriptorModel.FromActiveDirectoryObject(item))
+                .OrderBy(item => item.Name).ToList();
+
+            var m = new AdministratorsModel()
+            {
+                AdministratorSubjects = administratorSubjects
+            };
+
+            return View(m);
+        }
+        public virtual ActionResult AdministratorsSearch(string term)
+        {
+            var groupResults = ActiveDirectory.SearchADGroups(term).Cast<IADObject>();
+            var userResults = ActiveDirectory.SearchADUserAccounts(term, Quick: true).Cast<IADObject>();
+
+            var results = groupResults.Concat(userResults).OrderBy(r => r.SamAccountName)
+                .Select(r => SubjectDescriptorModel.FromActiveDirectoryObject(r)).ToList();
+
+            return Json(results, JsonRequestBehavior.AllowGet);
+        }
+        public virtual ActionResult AdministratorsSubject(string Id)
+        {
+            if (string.IsNullOrWhiteSpace(Id))
+                return Json(null, JsonRequestBehavior.AllowGet);
+
+            Id = ActiveDirectory.ParseDomainAccountId(Id);
+
+            var subject = ActiveDirectory.RetrieveADObject(Id, Quick: true);
+
+            if (subject == null || !(subject is ADUserAccount || subject is ADGroup))
+                return Json(null, JsonRequestBehavior.AllowGet);
+            else
+                return Json(SubjectDescriptorModel.FromActiveDirectoryObject(subject), JsonRequestBehavior.AllowGet);
+        }
+        [HttpPost]
+        public virtual ActionResult Administrators(string[] Subjects)
+        {
+            string[] proposedSubjects;
+            string[] removedSubjects = null;
+            string[] addedSubjects = null;
+
+            // Validate Subjects
+            if (Subjects != null || Subjects.Length > 0)
+            {
+
+                var subjects = Subjects
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => s.Trim())
+                    .Select(s => Tuple.Create(s, ActiveDirectory.RetrieveADObject(s, Quick: true)))
+                    .ToList();
+                var invalidSubjects = subjects.Where(s => s.Item2 == null).ToList();
+
+                if (invalidSubjects.Count > 0)
+                    throw new ArgumentException(string.Format("Subjects not found: {0}", string.Join(", ", invalidSubjects)), "Subjects");
+
+                proposedSubjects = subjects.Select(s => s.Item2.Id).OrderBy(s => s).ToArray();
+                var currentSubjects = UserService.AdministratorSubjectIds;
+                removedSubjects = currentSubjects.Except(proposedSubjects).ToArray();
+                addedSubjects = proposedSubjects.Except(currentSubjects).ToArray();
+
+                using (DiscoDataContext database = new DiscoDataContext())
+                {
+                    UserService.UpdateAdministratorSubjectIds(database, proposedSubjects);
+                }
+
+                if (removedSubjects != null && removedSubjects.Length > 0)
+                    AuthorizationLog.LogAdministratorSubjectsRemoved("<Initial Configuration>", removedSubjects);
+                if (addedSubjects != null && addedSubjects.Length > 0)
+                    AuthorizationLog.LogAdministratorSubjectsAdded("<Initial Configuration>", addedSubjects);
+            }
+
+            return RedirectToAction(MVC.InitialConfig.Complete());
+        }
+
         #endregion
 
         #region Complete

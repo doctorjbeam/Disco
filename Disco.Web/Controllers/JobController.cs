@@ -1,13 +1,18 @@
 ﻿using Disco.BI.Extensions;
-using Disco.BI.JobBI;
-using Disco.Data.Repository;
+using Disco.Models.BI.Job;
 using Disco.Models.Repository;
+using Disco.Models.Services.Jobs.JobLists;
 using Disco.Models.UI.Job;
+using Disco.Services;
 using Disco.Services.Authorization;
+using Disco.Services.Jobs.JobLists;
+using Disco.Services.Jobs.JobQueues;
+using Disco.Services.Plugins.Features.RepairProvider;
 using Disco.Services.Plugins.Features.UIExtension;
 using Disco.Services.Plugins.Features.WarrantyProvider;
 using Disco.Services.Users;
 using Disco.Services.Web;
+using Exceptionless;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -21,84 +26,20 @@ namespace Disco.Web.Controllers
 
         #region Index
 
-
-        #region Managed Job Lists
-        private static object jobListCreationLock = new object();
-
-        private static ManagedJobList jobList_OpenJobs;
-        private static ManagedJobList jobList_LongRunning;
-
-        internal static ManagedJobList ReInitializeLongRunningJobList(DiscoDataContext Database)
-        {
-            if (jobList_LongRunning == null)
-                return InitializeLongRunningJobList(Database);
-            else
-            {
-                var longRunningThreshold = DateTime.Today.AddDays(Database.DiscoConfiguration.JobPreferences.LongRunningJobDaysThreshold * -1);
-
-                return jobList_LongRunning.ReInitialize(Database, q => q.Where(j => j.ClosedDate == null && j.OpenedDate < longRunningThreshold));
-            }
-        }
-        internal static ManagedJobList InitializeLongRunningJobList(DiscoDataContext Database)
-        {
-            if (jobList_LongRunning == null)
-            {
-                lock (jobListCreationLock)
-                {
-                    if (jobList_LongRunning == null)
-                    {
-                        var longRunningThreshold = DateTime.Today.AddDays(Database.DiscoConfiguration.JobPreferences.LongRunningJobDaysThreshold * -1);
-
-                        jobList_LongRunning = new ManagedJobList()
-                        {
-                            Name = "Long Running Jobs",
-                            FilterFunction = q => q.Where(j => j.ClosedDate == null && j.OpenedDate < longRunningThreshold),
-                            SortFunction = q => q.OrderBy(j => j.Id),
-                            ShowStatus = true
-                        }.Initialize(Database);
-                    }
-                }
-            }
-            return jobList_LongRunning;
-        }
-        internal static ManagedJobList InitializeOpenJobList(DiscoDataContext Database)
-        {
-            if (jobList_OpenJobs == null)
-            {
-                lock (jobListCreationLock)
-                {
-                    if (jobList_OpenJobs == null)
-                    {
-                        jobList_OpenJobs = new ManagedJobList()
-                        {
-                            Name = "Open Jobs Awaiting Technician Action",
-                            FilterFunction = q => q.Where(j => j.ClosedDate == null && !j.WaitingForUserAction.HasValue
-                                && !(j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty.RepairerLoggedDate.HasValue && j.JobMetaNonWarranty.IsInsuranceClaim && !j.JobMetaInsurance.ClaimFormSentDate.HasValue))
-                                && !(j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty.RepairerLoggedDate.HasValue && !j.JobMetaNonWarranty.RepairerCompletedDate.HasValue))
-                                && !(j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty.RepairerLoggedDate.HasValue && j.JobMetaNonWarranty.AccountingChargeAddedDate.HasValue && !j.JobMetaNonWarranty.AccountingChargePaidDate.HasValue))
-                                && !(j.JobTypeId == JobType.JobTypeIds.HWar && (j.JobMetaWarranty.ExternalLoggedDate.HasValue && !j.JobMetaWarranty.ExternalCompletedDate.HasValue))
-                                && (j.DeviceHeld == null || j.DeviceReturnedDate != null || j.DeviceReadyForReturn == null)),
-                            SortFunction = q => q.OrderBy(j => j.Id),
-                            ShowStatus = true
-                        }.Initialize(Database);
-                    }
-                }
-            }
-            return jobList_OpenJobs;
-        }
-        #endregion
-
         public virtual ActionResult Index()
         {
             var m = new Models.Job.IndexModel();
 
-            InitializeOpenJobList(Database);
-            InitializeLongRunningJobList(Database);
+            if (Authorization.Has(Claims.Job.Lists.MyJobs))
+                m.MyJobs = ManagedJobList.MyJobsTable(Authorization);
 
-            if (Authorization.Has(Claims.Job.Lists.AwaitingTechnicianAction))
-                m.OpenJobs = jobList_OpenJobs;
-            if (Authorization.Has(Claims.Job.Lists.LongRunningJobs))
-                m.LongRunningJobs = jobList_LongRunning;
+            if (Authorization.Has(Claims.Job.Lists.StaleJobs))
+            {
+                var staleThreshold = DateTime.Today.AddMinutes(Database.DiscoConfiguration.JobPreferences.StaleJobMinutesThreshold * -1);
+                m.StaleJobs = ManagedJobList.OpenJobsTable(q => q.Where(j => j.LastActivityDate < staleThreshold).OrderBy(j => j.LastActivityDate));
+                m.StaleJobs.ShowLastActivityDate = true;
+                m.StaleJobs.ShowDates = false;
+            }
             if (Authorization.Has(Claims.Job.ShowDailyChart))
                 m.DailyOpenedClosedStatistics = Disco.BI.JobBI.Statistics.DailyOpenedClosed.Data(Database, true);
 
@@ -110,13 +51,41 @@ namespace Disco.Web.Controllers
         #endregion
 
         #region Lists
+        [DiscoAuthorize(Claims.Job.Lists.JobQueueLists)]
+        public virtual ActionResult Queue(int id)
+        {
+            var queueToken = JobQueueService.GetQueue(id);
+
+            if (queueToken == null)
+                throw new ArgumentException("Invalid Job Queue Id", "id");
+
+            var m = new Models.Job.ListModel() { Title = string.Format("Queue: {0}", queueToken.JobQueue.Name) };
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j => j.ActiveJobQueues.Any(jqj => jqj.QueueId == queueToken.JobQueue.Id)));
+
+            // UI Extensions
+            UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
+
+            return View(Views.List, m);
+        }
+
         [DiscoAuthorize(Claims.Job.Lists.AllOpen)]
         public virtual ActionResult AllOpen()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "All Open Jobs" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true };
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.ClosedDate == null).OrderBy(j => j.Id));
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.OrderBy(j => j.JobId));
+
+            // UI Extensions
+            UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
+
+            return View(Views.List, m);
+        }
+
+        [DiscoAuthorize(Claims.Job.Lists.AwaitingTechnicianAction)]
+        public virtual ActionResult AwaitingTechnicianAction()
+        {
+            var m = new Models.Job.ListModel() { Title = "Jobs Awaiting Technician Action" };
+
+            m.JobTable = ManagedJobList.OpenJobsTable(ManagedJobList.AwaitingTechnicianActionFilter);
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -127,13 +96,12 @@ namespace Disco.Web.Controllers
         [DiscoAuthorize(Claims.Job.Lists.DevicesReadyForReturn)]
         public virtual ActionResult DevicesReadyForReturn()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "Jobs with Devices Ready for Return" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true };
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => !j.WaitingForUserAction.HasValue
+
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j => !j.WaitingForUserAction.HasValue
                 && j.DeviceHeld != null && j.DeviceReturnedDate == null && j.DeviceReadyForReturn != null &&
-                ((!j.JobMetaNonWarranty.AccountingChargeRequiredDate.HasValue && !j.JobMetaNonWarranty.AccountingChargeAddedDate.HasValue) || j.JobMetaNonWarranty.AccountingChargePaidDate.HasValue)
-                && j.ClosedDate == null).OrderBy(j => j.Id));
+                ((!j.JobMetaNonWarranty_AccountingChargeRequiredDate.HasValue && !j.JobMetaNonWarranty_AccountingChargeAddedDate.HasValue) || j.JobMetaNonWarranty_AccountingChargePaidDate.HasValue))
+                .OrderBy(j => j.JobId));
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -144,14 +112,12 @@ namespace Disco.Web.Controllers
         [DiscoAuthorize(Claims.Job.Lists.DevicesAwaitingRepair)]
         public virtual ActionResult DevicesAwaitingRepair()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "Jobs with Devices Awaiting Repair" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true };
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.ClosedDate == null &&
-                (
-                (j.JobMetaNonWarranty.RepairerLoggedDate != null && j.JobMetaNonWarranty.RepairerCompletedDate == null) ||
-                (j.JobMetaWarranty.ExternalLoggedDate != null && j.JobMetaWarranty.ExternalCompletedDate == null)
-                )).OrderBy(j => j.Id));
+
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j =>
+                (j.JobMetaNonWarranty_RepairerLoggedDate != null && j.JobMetaNonWarranty_RepairerCompletedDate == null) ||
+                (j.JobMetaWarranty_ExternalLoggedDate != null && j.JobMetaWarranty_ExternalCompletedDate == null)
+                ).OrderBy(j => j.JobId));
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -163,16 +129,13 @@ namespace Disco.Web.Controllers
         [DiscoAuthorize(Claims.Job.Lists.AwaitingFinance)]
         public virtual ActionResult AwaitingFinance()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "Jobs Awaiting Finance" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true };
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.ClosedDate == null &&
-                (
-                (j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty.IsInsuranceClaim && !j.JobMetaInsurance.ClaimFormSentDate.HasValue)) ||
-                (j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty.AccountingChargeRequiredDate.HasValue && (!j.JobMetaNonWarranty.AccountingChargeAddedDate.HasValue && !j.JobMetaNonWarranty.AccountingChargePaidDate.HasValue))) ||
-                (j.JobTypeId == JobType.JobTypeIds.HNWar && (!j.JobMetaNonWarranty.AccountingChargeAddedDate.HasValue || !j.JobMetaNonWarranty.AccountingChargePaidDate.HasValue)) ||
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j =>
+                (j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty_IsInsuranceClaim.Value && !j.JobMetaInsurance_ClaimFormSentDate.HasValue)) ||
+                (j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty_AccountingChargeRequiredDate.HasValue && !j.JobMetaNonWarranty_AccountingChargeAddedDate.HasValue)) ||
+                (j.JobTypeId == JobType.JobTypeIds.HNWar && ((j.JobMetaNonWarranty_AccountingChargeRequiredDate.HasValue || j.JobMetaNonWarranty_AccountingChargeAddedDate.HasValue) && !j.JobMetaNonWarranty_AccountingChargePaidDate.HasValue)) ||
                 (j.JobTypeId == JobType.JobTypeIds.UMgmt && Job.UserManagementFlags.Infringement_BreachFinancialAgreement == (j.Flags & Job.UserManagementFlags.Infringement_BreachFinancialAgreement))
-                )));
+                ));
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -183,12 +146,10 @@ namespace Disco.Web.Controllers
         [DiscoAuthorizeAll(Claims.Job.Lists.AwaitingFinance, Claims.Job.Lists.AwaitingFinanceCharge)]
         public virtual ActionResult AwaitingFinanceCharge()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "Jobs Awaiting Finance - Accounting Charge" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true };
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.ClosedDate == null &&
-                (j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty.AccountingChargeRequiredDate.HasValue && (!j.JobMetaNonWarranty.AccountingChargeAddedDate.HasValue && !j.JobMetaNonWarranty.AccountingChargePaidDate.HasValue)))
-                ).OrderBy(j => j.Id));
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j =>
+                j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty_AccountingChargeRequiredDate.HasValue && !j.JobMetaNonWarranty_AccountingChargeAddedDate.HasValue)
+                ).OrderBy(j => j.JobId));
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -199,12 +160,10 @@ namespace Disco.Web.Controllers
         [DiscoAuthorizeAll(Claims.Job.Lists.AwaitingFinance, Claims.Job.Lists.AwaitingFinancePayment)]
         public virtual ActionResult AwaitingFinancePayment()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "Jobs Awaiting Finance - Accounting Payment" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true };
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.ClosedDate == null &&
-                (j.JobTypeId == JobType.JobTypeIds.HNWar && (!j.JobMetaNonWarranty.AccountingChargeAddedDate.HasValue || !j.JobMetaNonWarranty.AccountingChargePaidDate.HasValue))
-                ).OrderBy(j => j.Id));
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j =>
+                j.JobTypeId == JobType.JobTypeIds.HNWar && ((j.JobMetaNonWarranty_AccountingChargeRequiredDate.HasValue || j.JobMetaNonWarranty_AccountingChargeAddedDate.HasValue) && !j.JobMetaNonWarranty_AccountingChargePaidDate.HasValue)
+                ).OrderBy(j => j.JobId));
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -215,12 +174,10 @@ namespace Disco.Web.Controllers
         [DiscoAuthorizeAll(Claims.Job.Lists.AwaitingFinance, Claims.Job.Lists.AwaitingFinanceInsuranceProcessing)]
         public virtual ActionResult AwaitingFinanceInsuranceProcessing()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "Jobs Awaiting Finance - Insurance Processing" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true };
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.ClosedDate == null &&
-                (j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty.IsInsuranceClaim && !j.JobMetaInsurance.ClaimFormSentDate.HasValue))
-                ).OrderBy(j => j.Id));
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j =>
+                j.JobTypeId == JobType.JobTypeIds.HNWar && (j.JobMetaNonWarranty_IsInsuranceClaim.Value && !j.JobMetaInsurance_ClaimFormSentDate.HasValue)
+                ).OrderBy(j => j.JobId));
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -231,12 +188,10 @@ namespace Disco.Web.Controllers
         [DiscoAuthorizeAll(Claims.Job.Lists.AwaitingFinance, Claims.Job.Lists.AwaitingFinanceAgreementBreach)]
         public virtual ActionResult AwaitingFinanceAgreementBreach()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "Jobs Awaiting Finance - Agreement Breach" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true };
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.ClosedDate == null &&
-                (j.JobTypeId == JobType.JobTypeIds.UMgmt && Job.UserManagementFlags.Infringement_BreachFinancialAgreement == (j.Flags & Job.UserManagementFlags.Infringement_BreachFinancialAgreement))
-                ).OrderBy(j => j.Id));
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j =>
+                j.JobTypeId == JobType.JobTypeIds.UMgmt && Job.UserManagementFlags.Infringement_BreachFinancialAgreement == (j.Flags & Job.UserManagementFlags.Infringement_BreachFinancialAgreement)
+                ).OrderBy(j => j.JobId));
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -248,11 +203,12 @@ namespace Disco.Web.Controllers
         [DiscoAuthorize(Claims.Job.Lists.AwaitingUserAction)]
         public virtual ActionResult AwaitingUserAction()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "Jobs Awaiting User Action" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true };
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => (j.WaitingForUserAction.HasValue || (j.JobMetaNonWarranty.AccountingChargeAddedDate != null && j.JobMetaNonWarranty.AccountingChargePaidDate == null))
-                                                                          && j.ClosedDate == null).OrderBy(j => j.Id));
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j =>
+                j.WaitingForUserAction.HasValue ||
+                (j.JobMetaNonWarranty_AccountingChargeAddedDate != null && j.JobMetaNonWarranty_AccountingChargePaidDate == null) ||
+                (j.JobMetaNonWarranty_AccountingChargeRequiredDate != null && j.JobMetaNonWarranty_AccountingChargePaidDate == null)
+                ).OrderBy(j => j.JobId));
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -263,9 +219,8 @@ namespace Disco.Web.Controllers
         [DiscoAuthorize(Claims.Job.Lists.RecentlyClosed)]
         public virtual ActionResult RecentlyClosed()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "Recently Closed Jobs" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true };
+            m.JobTable = new JobTableModel() { ShowStatus = true };
 
             var dateTimeNow = DateTime.Now;
             var closedThreshold = dateTimeNow.AddDays(-2);
@@ -273,7 +228,7 @@ namespace Disco.Web.Controllers
                 closedThreshold = closedThreshold.AddDays(-2);
             if (dateTimeNow.DayOfWeek == DayOfWeek.Tuesday)
                 closedThreshold = closedThreshold.AddDays(-1);
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.ClosedDate > closedThreshold).OrderBy(j => j.Id));
+            m.JobTable.Fill(Database, Disco.Services.Searching.Search.BuildJobTableModel(Database).Where(j => j.ClosedDate > closedThreshold).OrderBy(j => j.Id), true);
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -284,10 +239,42 @@ namespace Disco.Web.Controllers
         [DiscoAuthorize(Claims.Job.Lists.Locations)]
         public virtual ActionResult Locations()
         {
-            Database.Configuration.LazyLoadingEnabled = true;
             var m = new Models.Job.ListModel() { Title = "Held Device Locations" };
-            m.JobTable = new Disco.Models.BI.Job.JobTableModel() { ShowStatus = true, ShowLocation = true, ShowTechnician = false, ShowType = false };
-            m.JobTable.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.ClosedDate == null && j.DeviceHeld.HasValue && !j.DeviceReturnedDate.HasValue).OrderBy(j => j.DeviceHeldLocation));
+
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j => j.DeviceHeld.HasValue && !j.DeviceReturnedDate.HasValue).OrderBy(j => j.DeviceHeldLocation));
+            m.JobTable.ShowLocation = true;
+            m.JobTable.ShowTechnician = false;
+            m.JobTable.ShowType = false;
+
+            // UI Extensions
+            UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
+
+            return View(Views.List, m);
+        }
+
+        [DiscoAuthorize(Claims.Job.Lists.LongRunningJobs)]
+        public virtual ActionResult LongRunning()
+        {
+            var m = new Models.Job.ListModel() { Title = "Long Running Jobs" };
+
+            var longRunningThreshold = DateTime.Today.AddDays(Database.DiscoConfiguration.JobPreferences.LongRunningJobDaysThreshold * -1);
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j => j.OpenedDate < longRunningThreshold).OrderBy(j => j.JobId));
+
+            // UI Extensions
+            UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
+
+            return View(Views.List, m);
+        }
+
+        [DiscoAuthorize(Claims.Job.Lists.StaleJobs)]
+        public virtual ActionResult Stale()
+        {
+            var m = new Models.Job.ListModel() { Title = "Stale Jobs" };
+
+            var staleThreshold = DateTime.Today.AddMinutes(Database.DiscoConfiguration.JobPreferences.StaleJobMinutesThreshold * -1);
+            m.JobTable = ManagedJobList.OpenJobsTable(q => q.Where(j => j.LastActivityDate < staleThreshold).OrderBy(j => j.LastActivityDate));
+            m.JobTable.ShowLastActivityDate = true;
+            m.JobTable.ShowDates = false;
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobListModel>(this.ControllerContext, m);
@@ -308,10 +295,11 @@ namespace Disco.Web.Controllers
 
             var m = new Models.Job.ShowModel();
 
-            m.Job = (from j in Database.Jobs.Include("Device.DeviceModel").Include("Device.DeviceBatch").Include("DeviceHeldTechUser").Include("DeviceReadyForReturnTechUser").Include("DeviceReturnedTechUser")
-                         .Include("OpenedTechUser").Include("ClosedTechUser").Include("JobType").Include("JobSubTypes").Include("User").Include("JobLogs.TechUser")
-                     where (j.Id == id.Value)
-                     select j).FirstOrDefault();
+            m.Job = Database.Jobs
+                .Include("Device.DeviceModel").Include("Device.DeviceBatch").Include("DeviceHeldTechUser").Include("DeviceReadyForReturnTechUser").Include("DeviceReturnedTechUser")
+                .Include("OpenedTechUser").Include("ClosedTechUser").Include("JobType").Include("JobSubTypes").Include("User.UserFlagAssignments").Include("JobLogs.TechUser")
+                .Include("JobAttachments.TechUser").Include("JobAttachments.DocumentTemplate")
+                .FirstOrDefault(j => j.Id == id.Value);
 
             if (m.Job == null)
                 throw new ArgumentException(string.Format("Unknown Job: [{0}]", id), "id");
@@ -344,15 +332,32 @@ namespace Disco.Web.Controllers
                     throw new InvalidOperationException("Unknown JobType");
             }
 
-            m.IsLongRunning =
-                (!m.Job.ClosedDate.HasValue && m.Job.OpenedDate < DateTime.Today.AddDays(Database.DiscoConfiguration.JobPreferences.LongRunningJobDaysThreshold * -1)) ||
-                (m.Job.ClosedDate.HasValue && m.Job.OpenedDate.AddDays(Database.DiscoConfiguration.JobPreferences.LongRunningJobDaysThreshold) < m.Job.ClosedDate.Value);
+            if ((!m.Job.ClosedDate.HasValue && m.Job.OpenedDate < DateTime.Today.AddDays(Database.DiscoConfiguration.JobPreferences.LongRunningJobDaysThreshold * -1)) ||
+                (m.Job.ClosedDate.HasValue && m.Job.OpenedDate.AddDays(Database.DiscoConfiguration.JobPreferences.LongRunningJobDaysThreshold) < m.Job.ClosedDate.Value))
+            {
+                m.LongRunning = m.Job.ClosedDate.HasValue ? m.Job.ClosedDate.Value - m.Job.OpenedDate : DateTime.Now - m.Job.OpenedDate;
+            }
 
             if (Authorization.Has(Claims.Job.Actions.UpdateSubTypes))
                 m.UpdatableJobSubTypes = m.Job.JobType.JobSubTypes.OrderBy(jst => jst.Description).ToList();
 
             if (Authorization.Has(Claims.Job.Actions.GenerateDocuments))
                 m.AvailableDocumentTemplates = m.Job.AvailableDocumentTemplates(Database, UserService.CurrentUser, DateTime.Now);
+
+            // Available Job Queues
+            IEnumerable<JobQueueToken> jobQueues = null;
+            if (Authorization.Has(Claims.Job.Actions.AddAnyQueues))
+                jobQueues = JobQueueService.GetQueues();
+            else if (Authorization.Has(Claims.Job.Actions.AddOwnQueues))
+                jobQueues = JobQueueService.UsersQueues(CurrentUser);
+            m.AvailableQueues = jobQueues == null ? null : jobQueues.Select(qt => qt.JobQueue).Where(q => m.Job.CanAddQueue(q)).ToList();
+
+            if (Authorization.Has(Claims.Job.Properties.DeviceHeldLocation))
+            {
+                m.LocationMode = Database.DiscoConfiguration.JobPreferences.LocationMode;
+                if (m.LocationMode == LocationModes.RestrictedList)
+                    m.LocationOptions = ManagedJobList.OpenJobsTable(j => j).Items.Cast<JobTableStatusItemModel>().JobLocationReferences(Database.DiscoConfiguration.JobPreferences.LocationList).ToList();
+            }
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobShowModel>(this.ControllerContext, m);
@@ -370,7 +375,7 @@ namespace Disco.Web.Controllers
                 DeviceSerialNumber = DeviceSerialNumber,
                 UserId = UserId
             };
-            m.UpdateModel(Database);
+            m.UpdateModel(Database, Authorization);
 
             // UI Extensions
             UIExtensions.ExecuteExtensions<JobCreateModel>(this.ControllerContext, m);
@@ -380,7 +385,7 @@ namespace Disco.Web.Controllers
         [HttpPost, DiscoAuthorize(Claims.Job.Actions.Create)]
         public virtual ActionResult Create(Models.Job.CreateModel m)
         {
-            m.UpdateModel(Database);
+            m.UpdateModel(Database, Authorization);
 
             if (!ModelState.IsValid)
             {
@@ -393,7 +398,13 @@ namespace Disco.Web.Controllers
             {
                 // Create New Job
                 var currentUser = Database.Users.Find(UserService.CurrentUserId);
-                var j = BI.JobBI.Utilities.Create(Database, m.Device, m.User, m.GetJobType, m.GetJobSubTypes, currentUser);
+
+                // Try QuickLog?
+                bool addAutoQueues = !(Authorization.Has(Claims.Job.Actions.Close)
+                    && m.QuickLog.HasValue && m.QuickLog.Value
+                    && m.QuickLogTaskTimeMinutes.HasValue && m.QuickLogTaskTimeMinutes.Value > 0);
+
+                var j = BI.JobBI.Utilities.Create(Database, m.Device, m.User, m.GetJobType, m.GetJobSubTypes, currentUser, addAutoQueues);
 
                 if (m.DeviceHeld.Value)
                 {
@@ -402,13 +413,17 @@ namespace Disco.Web.Controllers
                 }
                 else
                 {
-                    if (m.QuickLog.HasValue && m.QuickLog.Value && m.QuickLogTaskTimeMinutes.HasValue && m.QuickLogTaskTimeMinutes.Value > 0)
+                    if (Authorization.Has(Claims.Job.Actions.Close)
+                        && m.QuickLog.HasValue && m.QuickLog.Value
+                        && m.QuickLogTaskTimeMinutes.HasValue && m.QuickLogTaskTimeMinutes.Value > 0
+                        && (j.JobQueues == null || j.JobQueues.All(jqj => jqj.RemovedDate.HasValue))
+                        )
                     {
                         // Quick Log
                         // Set Opened Date in the past
                         j.OpenedDate = DateTime.Now.AddMinutes(-1 * m.QuickLogTaskTimeMinutes.Value);
                         // Close Job
-                        j.OnClose(currentUser);
+                        j.OnCloseNormally(currentUser);
                     }
                     else
                     {
@@ -432,11 +447,23 @@ namespace Disco.Web.Controllers
                 Database.SaveChanges();
 
                 // Return Dialog Redirect
-                var redirectModel = new Models.Job.CreateRedirectModel();
-                if (m.QuickLog.HasValue && m.QuickLog.Value && !string.IsNullOrWhiteSpace(m.QuickLogDestinationUrl))
-                    redirectModel.RedirectLink = m.QuickLogDestinationUrl;
+                var redirectModel = new Models.Job.CreateRedirectModel()
+                {
+                    JobId = j.Id
+                };
+                redirectModel.RedirectDelay = TimeSpan.FromSeconds(2);
+                if (m.QuickLog.HasValue && m.QuickLog.Value && !string.IsNullOrWhiteSpace(m.SourceUrl))
+                    redirectModel.RedirectLink = m.SourceUrl;
+                else if (!Authorization.Has(Claims.Job.Show))
+                    if (!string.IsNullOrWhiteSpace(m.SourceUrl))
+                        redirectModel.RedirectLink = m.SourceUrl;
+                    else
+                        redirectModel.RedirectLink = Url.Action(MVC.Job.Index());
                 else
+                {
                     redirectModel.RedirectLink = Url.Action(MVC.Job.Show(j.Id));
+                    redirectModel.RedirectDelay = null;
+                }
 
                 return View(Views.Create_Redirect, redirectModel);
             }
@@ -447,7 +474,12 @@ namespace Disco.Web.Controllers
         [DiscoAuthorize(Claims.Job.Actions.LogWarranty)]
         public virtual ActionResult LogWarranty(int id, string WarrantyProviderId, int? OrganisationAddressId)
         {
-            var m = new Models.Job.LogWarrantyModel() { JobId = id, WarrantyProviderId = WarrantyProviderId, OrganisationAddressId = OrganisationAddressId };
+            var m = new Models.Job.LogWarrantyModel()
+            {
+                JobId = id,
+                WarrantyProviderId = WarrantyProviderId,
+                OrganisationAddressId = OrganisationAddressId
+            };
             m.UpdateModel(Database, false);
             m.FaultDescription = m.Job.GenerateFaultDescription(Database);
 
@@ -472,8 +504,52 @@ namespace Disco.Web.Controllers
 
             if (ModelState.IsValid)
             {
-                switch (m.WarrantyAction)
+                switch (m.SubmissionAction)
                 {
+                    case "Update":
+                        var updatedModel = new Models.Job.LogWarrantyModel()
+                        {
+                            JobId = m.JobId,
+                            WarrantyProviderId = m.WarrantyProviderId,
+                            OrganisationAddressId = m.OrganisationAddressId,
+                            FaultDescription = m.FaultDescription,
+                            PublishAttachmentIds = m.PublishAttachmentIds,
+                            PublishAttachments = m.PublishAttachments
+                        };
+                        updatedModel.UpdateModel(Database, false);
+
+                        if (updatedModel.WarrantyProvider != null)
+                        {
+                            using (var wp = updatedModel.WarrantyProvider.CreateInstance<WarrantyProviderFeature>())
+                            {
+                                if (wp.SubmitJobViewType != null)
+                                {
+                                    updatedModel.WarrantyProviderSubmitJobViewType = wp.SubmitJobViewType;
+                                    updatedModel.WarrantyProviderSubmitJobModel = wp.SubmitJobViewModel(Database, this, updatedModel.Job, updatedModel.OrganisationAddress, updatedModel.TechUser);
+                                }
+                            }
+                        }
+
+                        return View(updatedModel);
+                    case "Manual":
+                        if (string.IsNullOrWhiteSpace(m.ManualProviderName))
+                        {
+                            ModelState.AddModelError("ManualProviderName", "The Warranty Provider Name is required");
+                            return View(Views.LogWarranty, m);
+                        }
+                        try
+                        {
+                            m.Job.OnLogWarranty(Database, m.FaultDescription, m.ManualProviderName, m.ManualProviderReference, m.OrganisationAddress, m.TechUser);
+                            Database.SaveChanges();
+                            return RedirectToAction(MVC.Job.Show(m.JobId));
+                        }
+                        catch (Exception ex)
+                        {
+                            ex.ToExceptionless().Submit();
+                            m.Error = ex;
+                            return View(Views.LogWarrantyError, m);
+                            throw;
+                        }
                     case "Disclose":
                         using (var p = m.WarrantyProvider.CreateInstance<WarrantyProviderFeature>())
                         {
@@ -484,6 +560,7 @@ namespace Disco.Web.Controllers
                             }
                             catch (Exception ex)
                             {
+                                ex.ToExceptionless().Submit();
                                 m.Error = ex;
                                 return View(Views.LogWarrantyError, m);
                             }
@@ -492,7 +569,7 @@ namespace Disco.Web.Controllers
 
                             if (warrantyProviderProperties != null)
                             {
-                                m.WarrantyProviderPropertiesJson = JsonConvert.SerializeObject(warrantyProviderProperties);
+                                m.ProviderPropertiesJson = JsonConvert.SerializeObject(warrantyProviderProperties);
                             }
                             m.DiscloseProperties = p.SubmitJobDiscloseInfo(Database, m.Job, m.OrganisationAddress, m.TechUser, m.FaultDescription, warrantyProviderProperties);
                             return View(Views.LogWarrantyDisclose, m);
@@ -500,12 +577,13 @@ namespace Disco.Web.Controllers
                     case "Submit":
                         try
                         {
-                            m.Job.OnLogWarranty(Database, m.FaultDescription, m.WarrantyProvider, m.OrganisationAddress, m.TechUser, m.WarrantyProviderProperties());
+                            m.Job.OnLogWarranty(Database, m.FaultDescription, m.PublishAttachments, m.WarrantyProvider, m.OrganisationAddress, m.TechUser, m.ProviderProperties());
                             Database.SaveChanges();
                             return RedirectToAction(MVC.Job.Show(m.JobId));
                         }
                         catch (Exception ex)
                         {
+                            ex.ToExceptionless().Submit();
                             m.Error = ex;
                             return View(Views.LogWarrantyError, m);
                             throw;
@@ -524,7 +602,7 @@ namespace Disco.Web.Controllers
         [DiscoAuthorize(Claims.Job.Properties.WarrantyProperties.ProviderDetails)]
         public virtual ActionResult WarrantyProviderJobDetails(int id)
         {
-            Models.Job.WarrantyProviderJobDetailsModel model = new Models.Job.WarrantyProviderJobDetailsModel();
+            Models.Job.ProviderJobDetailsModel model = new Models.Job.ProviderJobDetailsModel();
 
             Job job = Database.Jobs.Include("Device.DeviceModel").Include("JobMetaWarranty").Include("JobSubTypes").Where(j => j.Id == id).FirstOrDefault();
             if (job != null)
@@ -550,6 +628,7 @@ namespace Disco.Web.Controllers
                                 }
                                 catch (Exception ex)
                                 {
+                                    ex.ToExceptionless().Submit();
                                     model.JobDetailsSupported = false;
                                     model.JobDetailsException = ex;
                                     return View(model);
@@ -566,6 +645,192 @@ namespace Disco.Web.Controllers
 
                     model.JobDetailsSupported = false;
                     model.JobDetailsNotSupportedMessage = string.Format("Warranty Provider '{0}' is not integrated with Disco", job.JobMetaWarranty.ExternalName);
+                    return View(model);
+                }
+                else
+                {
+                    model.JobDetailsSupported = false;
+                    model.JobDetailsNotSupportedMessage = "Job not in the correct state";
+                    return View(model);
+                }
+            }
+            else
+            {
+                return HttpNotFound("Invalid Job Id");
+            }
+        }
+        #endregion
+
+        #region Log Repair
+        [DiscoAuthorize(Claims.Job.Actions.LogRepair)]
+        public virtual ActionResult LogRepair(int id, string RepairProviderId, int? OrganisationAddressId)
+        {
+            var m = new Models.Job.LogRepairModel()
+            {
+                JobId = id,
+                RepairProviderId = RepairProviderId,
+                OrganisationAddressId = OrganisationAddressId
+            };
+            m.UpdateModel(Database, false);
+            m.RepairDescription = m.Job.GenerateFaultDescription(Database);
+
+            if (m.RepairProvider != null)
+            {
+                using (var rp = m.RepairProvider.CreateInstance<RepairProviderFeature>())
+                {
+                    m.RepairProviderSubmitJobBeginResult = rp.SubmitJobBegin(Database, this, m.Job, m.OrganisationAddress, m.TechUser);
+                }
+            }
+
+            return View(m);
+        }
+        [HttpPost, DiscoAuthorize(Claims.Job.Actions.LogRepair)]
+        public virtual ActionResult LogRepair(Models.Job.LogRepairModel m, FormCollection form)
+        {
+            m.UpdateModel(Database, true);
+
+            if (ModelState.IsValid)
+            {
+                switch (m.SubmissionAction)
+                {
+                    case "Update":
+                        var updatedModel = new Models.Job.LogRepairModel()
+                        {
+                            JobId = m.JobId,
+                            RepairProviderId = m.RepairProviderId,
+                            OrganisationAddressId = m.OrganisationAddressId,
+                            RepairDescription = m.RepairDescription,
+                            PublishAttachmentIds = m.PublishAttachmentIds,
+                            PublishAttachments = m.PublishAttachments
+                        };
+                        updatedModel.UpdateModel(Database, false);
+
+                        if (updatedModel.RepairProvider != null)
+                        {
+                            using (var wp = updatedModel.RepairProvider.CreateInstance<RepairProviderFeature>())
+                            {
+                                using (var rp = m.RepairProvider.CreateInstance<RepairProviderFeature>())
+                                {
+                                    m.RepairProviderSubmitJobBeginResult = rp.SubmitJobBegin(Database, this, updatedModel.Job, updatedModel.OrganisationAddress, updatedModel.TechUser);
+                                }
+                            }
+                        }
+
+                        return View(updatedModel);
+                    case "Manual":
+                        if (string.IsNullOrWhiteSpace(m.ManualProviderName))
+                        {
+                            ModelState.AddModelError("ManualProviderName", "The Repair Provider Name is required");
+                            return View(Views.LogRepair, m);
+                        }
+                        try
+                        {
+                            m.Job.OnLogRepair(Database, m.RepairDescription, m.ManualProviderName, m.ManualProviderReference, m.OrganisationAddress, m.TechUser);
+                            Database.SaveChanges();
+                            return RedirectToAction(MVC.Job.Show(m.JobId));
+                        }
+                        catch (Exception ex)
+                        {
+                            ex.ToExceptionless().Submit();
+                            m.Error = ex;
+                            return View(Views.LogRepairError, m);
+                            throw;
+                        }
+                    case "Disclose":
+                        using (var p = m.RepairProvider.CreateInstance<RepairProviderFeature>())
+                        {
+                            Dictionary<string, string> warrantyProviderProperties;
+                            try
+                            {
+                                warrantyProviderProperties = p.SubmitJobParseProperties(Database, form, this, m.Job, m.OrganisationAddress, m.TechUser, m.RepairDescription);
+                            }
+                            catch (Exception ex)
+                            {
+                                ex.ToExceptionless().Submit();
+                                m.Error = ex;
+                                return View(Views.LogRepairError, m);
+                            }
+                            if (!ModelState.IsValid)
+                                return View(Views.LogRepair, m);
+
+                            if (warrantyProviderProperties != null)
+                            {
+                                m.ProviderPropertiesJson = JsonConvert.SerializeObject(warrantyProviderProperties);
+                            }
+                            m.DiscloseProperties = p.SubmitJobDiscloseInfo(Database, m.Job, m.OrganisationAddress, m.TechUser, m.RepairDescription, warrantyProviderProperties);
+                            return View(Views.LogRepairDisclose, m);
+                        }
+                    case "Submit":
+                        try
+                        {
+                            m.Job.OnLogRepair(Database, m.RepairDescription, m.PublishAttachments, m.RepairProvider, m.OrganisationAddress, m.TechUser, m.ProviderProperties());
+                            Database.SaveChanges();
+                            return RedirectToAction(MVC.Job.Show(m.JobId));
+                        }
+                        catch (Exception ex)
+                        {
+                            ex.ToExceptionless().Submit();
+                            m.Error = ex;
+                            return View(Views.LogRepairError, m);
+                            throw;
+                        }
+                    default:
+                        return RedirectToAction(MVC.Job.Show(m.JobId));
+                }
+
+            }
+            else
+            {
+                return View(Views.LogRepair, m);
+            }
+        }
+
+        [DiscoAuthorize(Claims.Job.Properties.NonWarrantyProperties.RepairProviderDetails)]
+        public virtual ActionResult RepairProviderJobDetails(int id)
+        {
+            Models.Job.ProviderJobDetailsModel model = new Models.Job.ProviderJobDetailsModel();
+
+            Job job = Database.Jobs.Include("Device.DeviceModel").Include("JobMetaNonWarranty").Include("JobSubTypes").Where(j => j.Id == id).FirstOrDefault();
+            if (job != null)
+            {
+                if (job.JobMetaNonWarranty != null && !string.IsNullOrEmpty(job.JobMetaNonWarranty.RepairerName))
+                {
+                    var providerDef = RepairProviderFeature.FindPluginFeature(job.JobMetaNonWarranty.RepairerName);
+
+                    if (providerDef != null)
+                    {
+                        using (RepairProviderFeature providerInstance = providerDef.CreateInstance<RepairProviderFeature>())
+                        {
+                            if (providerInstance.JobDetailsSupported)
+                            {
+                                try
+                                {
+                                    Tuple<Type, dynamic> details = providerInstance.JobDetails(Database, this, job);
+
+                                    model.JobDetailsSupported = true;
+                                    model.ViewType =  details.Item1;
+                                    model.ViewModel = details.Item2;
+                                    return View(model);
+                                }
+                                catch (Exception ex)
+                                {
+                                    ex.ToExceptionless().Submit();
+                                    model.JobDetailsSupported = false;
+                                    model.JobDetailsException = ex;
+                                    return View(model);
+                                }
+                            }
+                            else
+                            {
+                                model.JobDetailsSupported = false;
+                                model.JobDetailsNotSupportedMessage = string.Format("Plugin '{0} ({1})' (Repair Provider for '{2}') doesn't support Job Details", providerInstance.Manifest.Name, providerInstance.Manifest.Id, providerInstance.ProviderId);
+                                return View(model);
+                            }
+                        }
+                    }
+
+                    model.JobDetailsSupported = false;
+                    model.JobDetailsNotSupportedMessage = string.Format("Repair Provider '{0}' is not integrated with Disco", job.JobMetaNonWarranty.RepairerName);
                     return View(model);
                 }
                 else

@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Disco.Models.Repository;
+using System.Data.SqlClient;
+using System.DirectoryServices.ActiveDirectory;
+using System.DirectoryServices;
 
 namespace Disco.Data.Repository
 {
@@ -15,6 +18,13 @@ namespace Disco.Data.Repository
             Database.SeedDeviceProfiles();
             Database.SeedJobTypes();
             Database.SeedJobSubTypes();
+
+            Database.SaveChanges();
+
+            // Migration Maintenance
+            Database.MigrateConfiguration();
+
+            Database.MigratePreDomainObjects();
         }
 
         public static void SeedDeploymentId(this DiscoDataContext Database)
@@ -23,6 +33,11 @@ namespace Disco.Data.Repository
             {
                 var deploymentId = Guid.NewGuid().ToString("D");
                 Database.ConfigurationItems.Add(new ConfigurationItem { Scope = "System", Key = "DeploymentId", Value = deploymentId });
+            }
+            if (Database.ConfigurationItems.Count(ci => ci.Scope == "System" && ci.Key == "DeploymentSecret") == 0)
+            {
+                var deploymentId = Guid.NewGuid().ToString("N");
+                Database.ConfigurationItems.Add(new ConfigurationItem { Scope = "System", Key = "DeploymentSecret", Value = deploymentId });
             }
         }
         public static void SeedJobTypes(this DiscoDataContext Database)
@@ -66,9 +81,16 @@ namespace Disco.Data.Repository
                         ShortName = "WS",
                         Name = "Default",
                         Description = "Initial Default Workstation Profile",
-                        ComputerNameTemplate = "DeviceProfile.ShortName + ''-'' + SerialNumber",
+                        ComputerNameTemplate = DeviceProfile.DefaultComputerNameTemplate,
                         DistributionType = DeviceProfile.DistributionTypes.OneToMany
                     });
+            }
+            else
+            {
+                // Bug Fix - correct invalid Computer Name Templates
+                var invalidProfiles = Database.DeviceProfiles.Where(dp => dp.ComputerNameTemplate == "DeviceProfile.ShortName + ''-'' + SerialNumber");
+                foreach (var p in invalidProfiles)
+                    p.ComputerNameTemplate = DeviceProfile.DefaultComputerNameTemplate;
             }
         }
         public static void SeedJobSubTypes(this DiscoDataContext Database)
@@ -297,5 +319,160 @@ namespace Disco.Data.Repository
             }
         }
         // End Added: 2013-02-07 G#
+
+        public static void MigrateConfiguration(this DiscoDataContext Database)
+        {
+            // Organisation Addresses - Force all to JSON serializing
+            Configuration.Modules.OrganisationAddressesConfiguration.MigrateDatabase(Database);
+
+            Database.SaveChanges();
+        }
+
+        #region Migrate Users SQL
+        private const string MigratePreDomainUsers_Sql = @"INSERT INTO [Users] SELECT @IdNew, u.DisplayName, u.Surname, u.GivenName, u.PhoneNumber, u.EmailAddress FROM [Users] u WHERE [Id]=@IdExisting;
+
+UPDATE [JobQueueJobs] SET [AddedUserId]=@IdNew WHERE [AddedUserId]=@IdExisting;
+UPDATE [JobQueueJobs] SET [RemovedUserId]=@IdNew WHERE [RemovedUserId]=@IdExisting;
+
+UPDATE [DeviceAttachments] SET [TechUserId]=@IdNew WHERE [TechUserId]=@IdExisting;
+
+UPDATE [Devices] SET [AssignedUserId]=@IdNew WHERE [AssignedUserId]=@IdExisting;
+
+UPDATE [DeviceUserAssignments] SET [AssignedUserId]=@IdNew WHERE [AssignedUserId]=@IdExisting;
+
+UPDATE [JobAttachments] SET [TechUserId]=@IdNew WHERE [TechUserId]=@IdExisting;
+
+UPDATE [JobComponents] SET [TechUserId]=@IdNew WHERE [TechUserId]=@IdExisting;
+
+UPDATE [JobLogs] SET [TechUserId]=@IdNew WHERE [TechUserId]=@IdExisting;
+
+UPDATE [JobMetaInsurances] SET [ClaimFormSentUserId]=@IdNew WHERE [ClaimFormSentUserId]=@IdExisting;
+
+UPDATE [JobMetaNonWarranties] SET [AccountingChargeAddedUserId]=@IdNew WHERE [AccountingChargeAddedUserId]=@IdExisting;
+UPDATE [JobMetaNonWarranties] SET [AccountingChargePaidUserId]=@IdNew WHERE [AccountingChargePaidUserId]=@IdExisting;
+UPDATE [JobMetaNonWarranties] SET [AccountingChargeRequiredUserId]=@IdNew WHERE [AccountingChargeRequiredUserId]=@IdExisting;
+UPDATE [JobMetaNonWarranties] SET [InvoiceReceivedUserId]=@IdNew WHERE [InvoiceReceivedUserId]=@IdExisting;
+UPDATE [JobMetaNonWarranties] SET [PurchaseOrderRaisedUserId]=@IdNew WHERE [PurchaseOrderRaisedUserId]=@IdExisting;
+UPDATE [JobMetaNonWarranties] SET [PurchaseOrderSentUserId]=@IdNew WHERE [PurchaseOrderSentUserId]=@IdExisting;
+
+UPDATE [Jobs] SET [ClosedTechUserId]=@IdNew WHERE [ClosedTechUserId]=@IdExisting;
+UPDATE [Jobs] SET [DeviceHeldTechUserId]=@IdNew WHERE [DeviceHeldTechUserId]=@IdExisting;
+UPDATE [Jobs] SET [DeviceReadyForReturnTechUserId]=@IdNew WHERE [DeviceReadyForReturnTechUserId]=@IdExisting;
+UPDATE [Jobs] SET [DeviceReturnedTechUserId]=@IdNew WHERE [DeviceReturnedTechUserId]=@IdExisting;
+UPDATE [Jobs] SET [OpenedTechUserId]=@IdNew WHERE [OpenedTechUserId]=@IdExisting;
+UPDATE [Jobs] SET [UserId]=@IdNew WHERE [UserId]=@IdExisting;
+
+UPDATE [UserAttachments] SET [TechUserId]=@IdNew WHERE [TechUserId]=@IdExisting;
+UPDATE [UserAttachments] SET [UserId]=@IdNew WHERE [UserId]=@IdExisting;
+
+DELETE [Users] WHERE [Id]=@IdExisting;";
+        #endregion
+        public static void MigratePreDomainObjects(this DiscoDataContext Database)
+        {
+            if (Database.Users.Count(u => !u.UserId.Contains(@"\")) > 0)
+            {
+                // Determine Computer Domain
+                string netBiosName = null;
+                string defaultNamingContext;
+                using (Domain d = Domain.GetComputerDomain())
+                {
+                    string ldapPath = string.Format("LDAP://{0}/", d.Name);
+                    string configurationNamingContext;
+
+                    using (var adRootDSE = new DirectoryEntry(ldapPath + "RootDSE"))
+                    {
+                        defaultNamingContext = adRootDSE.Properties["defaultNamingContext"][0].ToString();
+                        configurationNamingContext = adRootDSE.Properties["configurationNamingContext"][0].ToString();
+                    }
+
+                    using (var configSearchRoot = new DirectoryEntry(ldapPath + "CN=Partitions," + configurationNamingContext))
+                    {
+                        var configSearchFilter = string.Format("(&(objectcategory=Crossref)(dnsRoot={0})(netBIOSName=*))", d.Name);
+                        var configSearchLoadProperites = new string[] { "NetBIOSName" };
+
+                        using (var configSearcher = new DirectorySearcher(configSearchRoot, configSearchFilter, configSearchLoadProperites, SearchScope.OneLevel))
+                        {
+                            SearchResult configResult = configSearcher.FindOne();
+
+                            if (configResult != null)
+                                netBiosName = configResult.Properties["NetBIOSName"][0].ToString();
+                            else
+                                netBiosName = null;
+                        }
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(netBiosName))
+                    throw new InvalidOperationException("Unable to determine the Domains NetBIOS Name");
+
+                // MIGRATE SETTINGS
+
+                // Authorization Roles
+                foreach (var authRole in Database.AuthorizationRoles.Where(ar => ar.SubjectIds != null).ToList())
+                {
+                    var ids = string.Join(",", authRole.SubjectIds.Split(',').Select(id => id.Contains('\\') ? id : string.Format("{0}\\{1}", netBiosName, id)));
+                    if (ids != authRole.SubjectIds)
+                        authRole.SubjectIds = ids;
+                }
+                // Job Queues
+                foreach (var jobQueue in Database.JobQueues.Where(jq => jq.SubjectIds != null).ToList())
+                {
+                    var ids = string.Join(",", jobQueue.SubjectIds.Split(',').Select(id => id.Contains('\\') ? id : string.Format("{0}\\{1}", netBiosName, id)));
+                    if (ids != jobQueue.SubjectIds)
+                        jobQueue.SubjectIds = ids;
+                }
+                // Device Profiles - OU
+                foreach (var deviceProfile in Database.DeviceProfiles.Where(dp => dp.OrganisationalUnit == null || !dp.OrganisationalUnit.Contains(@"DC=")).ToList())
+                {
+                    if (string.IsNullOrWhiteSpace(deviceProfile.OrganisationalUnit))
+                        deviceProfile.OrganisationalUnit = string.Format("CN=Computers,{0}", defaultNamingContext);
+                    else
+                        deviceProfile.OrganisationalUnit = string.Format("{0},{1}", deviceProfile.OrganisationalUnit, defaultNamingContext);
+                }
+                Database.SaveChanges();
+
+                // MIGRATE Document Templates
+                var dataStoreLocation = Database.ConfigurationItems.Where(ci => ci.Scope == "System" && ci.Key == "DataStoreLocation").Select(ci => ci.Value).FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(dataStoreLocation) && System.IO.Directory.Exists(dataStoreLocation))
+                {
+                    string filePrefix = string.Format("{0}_", netBiosName);
+
+                    var userAttachmentsDirectory = System.IO.Path.Combine(dataStoreLocation, "UserAttachments");
+                    if (System.IO.Directory.Exists(userAttachmentsDirectory))
+                    {
+                        var files = System.IO.Directory.EnumerateFiles(userAttachmentsDirectory, "*.*", System.IO.SearchOption.AllDirectories)
+                            .Where(p => !p.StartsWith(filePrefix, StringComparison.OrdinalIgnoreCase) && (p.EndsWith("_thumb.jpg") || p.EndsWith("_file"))).ToList();
+
+                        foreach (var file in files)
+                        {
+                            try
+                            {
+                                var renameFile = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(file), string.Concat(filePrefix, System.IO.Path.GetFileName(file)));
+                                System.IO.File.Move(file, renameFile);
+                            }
+                            catch (Exception) { /* Ignore Errors */ }
+                        }
+                    }
+                }
+
+                // MIGRATE DEVICES
+                foreach (var device in Database.Devices.Where(d => d.DeviceDomainId != null && !d.DeviceDomainId.Contains(@"\")).ToList())
+                {
+                    device.DeviceDomainId = string.Format("{0}\\{1}", netBiosName, device.DeviceDomainId);
+                }
+                Database.SaveChanges();
+
+                // MIGRATE USERS
+                foreach (var user in Database.Users.Where(u => !u.UserId.Contains(@"\")).ToList())
+                {
+                    SqlParameter idExisting = new SqlParameter("@IdExisting", System.Data.SqlDbType.NVarChar, 50);
+                    idExisting.Value = user.UserId;
+
+                    SqlParameter idNew = new SqlParameter("@IdNew", System.Data.SqlDbType.NVarChar, 50);
+                    idNew.Value = string.Format("{0}\\{1}", netBiosName, user.UserId);
+
+                    Database.Database.ExecuteSqlCommand(MigratePreDomainUsers_Sql, idExisting, idNew);
+                }
+            }
+        }
     }
 }

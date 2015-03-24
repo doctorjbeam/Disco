@@ -2,6 +2,8 @@
 using Disco.Models.Repository;
 using Disco.Models.UI.Config.DeviceProfile;
 using Disco.Services.Authorization;
+using Disco.Services.Devices.ManagedGroups;
+using Disco.Services.Interop.ActiveDirectory;
 using Disco.Services.Plugins;
 using Disco.Services.Plugins.Features.CertificateProvider;
 using Disco.Services.Plugins.Features.UIExtension;
@@ -30,10 +32,17 @@ namespace Disco.Web.Areas.Config.Controllers
                 if (m == null || m.DeviceProfile == null)
                     throw new ArgumentException("Invalid Device Profile Id", "id");
 
-                m.OrganisationAddresses = Database.DiscoConfiguration.OrganisationAddresses.Addresses;
+                m.OrganisationAddresses = Database.DiscoConfiguration.OrganisationAddresses.Addresses.OrderBy(a => a.Name).ToList();
 
                 if (m.DeviceProfile.DefaultOrganisationAddress.HasValue)
                     m.DefaultOrganisationAddress = Database.DiscoConfiguration.OrganisationAddresses.GetAddress(m.DeviceProfile.DefaultOrganisationAddress.Value);
+
+                DeviceProfileAssignedUsersManagedGroup assignedUsersManagedGroup;
+                if (DeviceProfileAssignedUsersManagedGroup.TryGetManagedGroup(m.DeviceProfile, out assignedUsersManagedGroup))
+                    m.AssignedUsersLinkedGroup = assignedUsersManagedGroup;
+                DeviceProfileDevicesManagedGroup devicesManagedGroup;
+                if (DeviceProfileDevicesManagedGroup.TryGetManagedGroup(m.DeviceProfile, out devicesManagedGroup))
+                    m.DevicesLinkedGroup = devicesManagedGroup;
 
                 m.CertificateProviders = Plugins.GetPluginFeatures(typeof(CertificateProviderFeature));
 
@@ -73,9 +82,10 @@ namespace Disco.Web.Areas.Config.Controllers
             {
                 DeviceProfile = new DeviceProfile()
                 {
-                    ComputerNameTemplate = "DeviceProfile.ShortName + '-' + SerialNumber",
+                    ComputerNameTemplate = DeviceProfile.DefaultComputerNameTemplate,
                     ProvisionADAccount = true,
-                    DistributionType = DeviceProfile.DistributionTypes.OneToMany
+                    DistributionType = DeviceProfile.DistributionTypes.OneToMany,
+                    OrganisationalUnit = ActiveDirectory.Context.PrimaryDomain.DefaultComputerContainer
                 }
             };
 

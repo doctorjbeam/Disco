@@ -15,11 +15,11 @@
             <tbody>
                 <tr>
                     <th>LAN MAC Address</th>
-                    <td>@(Model.Device.DeviceDetails.LanMacAddress() ?? "Unknown")</td>
+                    <td class="code">@(Model.Device.DeviceDetails.LanMacAddress() ?? "Unknown")</td>
                 </tr>
                 <tr>
                     <th>WLAN MAC Address</th>
-                    <td>@(Model.Device.DeviceDetails.WLanMacAddress() ?? "Unknown")</td>
+                    <td class="code">@(Model.Device.DeviceDetails.WLanMacAddress() ?? "Unknown")</td>
                 </tr>
                 <tr>
                     <th>AC Adapter</th>
@@ -35,6 +35,40 @@
                         else
                         {
                         @(Model.Device.DeviceDetails.ACAdapter() ?? "Unknown")
+                        }
+                    </td>
+                </tr>
+                <tr>
+                    <th>Battery</th>
+                    <td>@if (canConfig)
+                        {
+                        @Html.TextBox("DeviceDetail_Battery", Model.Device.DeviceDetails.Battery()) @AjaxHelpers.AjaxSave() @AjaxHelpers.AjaxLoader()
+                        <script>
+                            $(function () {
+                                document.DiscoFunctions.PropertyChangeHelper($('#DeviceDetail_Battery'), 'Unknown', '@Url.Action(MVC.API.Device.UpdateDetailBattery(Model.Device.SerialNumber, null))', 'DetailBattery');
+                            });
+                        </script>
+                        }
+                        else
+                        {
+                        @(Model.Device.DeviceDetails.Battery() ?? "Unknown")
+                        }
+                    </td>
+                </tr>
+                <tr>
+                    <th>Keyboard</th>
+                    <td>@if (canConfig)
+                        {
+                        @Html.TextBox("DeviceDetail_Keyboard", Model.Device.DeviceDetails.Keyboard()) @AjaxHelpers.AjaxSave() @AjaxHelpers.AjaxLoader()
+                        <script>
+                            $(function () {
+                                document.DiscoFunctions.PropertyChangeHelper($('#DeviceDetail_Keyboard'), 'Unknown', '@Url.Action(MVC.API.Device.UpdateDetailKeyboard(Model.Device.SerialNumber, null))', 'DetailKeyboard');
+                            });
+                        </script>
+                        }
+                        else
+                        {
+                        @(Model.Device.DeviceDetails.Keyboard() ?? "Unknown")
                         }
                     </td>
                 </tr>

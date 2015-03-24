@@ -1,8 +1,8 @@
 ﻿using Disco.Data.Repository;
-using Disco.Models.Interop.ActiveDirectory;
 using Disco.Models.Repository;
 using Disco.Services.Authorization;
 using Disco.Services.Authorization.Roles;
+using Disco.Services.Interop.ActiveDirectory;
 using Disco.Services.Logging;
 using Newtonsoft.Json;
 using System;
@@ -20,16 +20,9 @@ namespace Disco.Services.Users
     public static class UserService
     {
         private const string _cacheHttpRequestKey = "Disco_CurrentUserToken";
-        private static Func<string, string[], ActiveDirectoryUserAccount> _GetActiveDirectoryUserAccount;
-        private static Func<string, string[], ActiveDirectoryMachineAccount> _GetActiveDirectoryMachineAccount;
 
-        public static void Initialize(DiscoDataContext Database,
-            Func<string, string[], ActiveDirectoryUserAccount> GetActiveDirectoryUserAccount,
-            Func<string, string[], ActiveDirectoryMachineAccount> GetActiveDirectoryMachineAccount)
+        public static void Initialize(DiscoDataContext Database)
         {
-            _GetActiveDirectoryUserAccount = GetActiveDirectoryUserAccount;
-            _GetActiveDirectoryMachineAccount = GetActiveDirectoryMachineAccount;
-
             Authorization.Roles.RoleCache.Initialize(Database);
         }
 
@@ -53,10 +46,7 @@ namespace Disco.Services.Users
                     userId = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
                 }
 
-                if (userId.Contains("\\"))
-                    return userId.Substring(checked(userId.IndexOf("\\") + 1));
-                else
-                    return userId;
+                return userId;
             }
         }
 
@@ -146,8 +136,6 @@ namespace Disco.Services.Users
             return Cache.InvalidateRecord(UserId);
         }
 
-
-
         public static int CreateAuthorizationRole(DiscoDataContext Database, AuthorizationRole Role)
         {
             if (Role == null)
@@ -201,17 +189,52 @@ namespace Disco.Services.Users
             Cache.FlushCache();
         }
 
+        public static IEnumerable<string> AdministratorSubjectIds
+        {
+            get
+            {
+                return RoleCache.AdministratorSubjectIds;
+            }
+        }
+        public static void UpdateAdministratorSubjectIds(DiscoDataContext Database, IEnumerable<string> SubjectIds)
+        {
+            // Update Database & In-Memory State
+            RoleCache.UpdateAdministratorSubjectIds(Database, SubjectIds);
+
+            // Flush User Cache
+            Cache.FlushCache();
+        }
+
+        internal static List<User> SearchUsers(DiscoDataContext Database, string Term, bool PersistResults, int? LimitCount = ActiveDirectory.DefaultSearchResultLimit)
+        {
+            var adImportedUsers = ActiveDirectory.SearchADUserAccounts(Term, Quick: true, ResultLimit: LimitCount).Select(adU => adU.ToRepositoryUser()).ToList();
+
+            if (PersistResults)
+            {
+                foreach (var adU in adImportedUsers)
+                {
+                    var existingUser = Database.Users.Find(adU.UserId);
+                    if (existingUser != null)
+                        existingUser.UpdateSelf(adU);
+                    else
+                        Database.Users.Add(adU);
+                    Database.SaveChanges();
+                    UserService.InvalidateCachedUser(adU.UserId);
+                }
+            }
+
+            return adImportedUsers;
+        }
+
         internal static Tuple<User, AuthorizationToken> ImportUser(DiscoDataContext Database, string UserId)
         {
-            if (_GetActiveDirectoryUserAccount == null)
-                throw new InvalidOperationException("UserServer has not been Initialized");
             if (string.IsNullOrEmpty(UserId))
                 throw new ArgumentNullException("UserId is required", "UserId");
 
             if (UserId.EndsWith("$"))
             {
                 // Machine Account
-                var adAccount = _GetActiveDirectoryMachineAccount(UserId, null);
+                var adAccount = ActiveDirectory.RetrieveADMachineAccount(UserId);
 
                 if (adAccount == null)
                     return null;
@@ -225,10 +248,10 @@ namespace Disco.Services.Users
             {
                 // User Account
 
-                ActiveDirectoryUserAccount adAccount;
+                ADUserAccount adAccount;
                 try
                 {
-                    adAccount = _GetActiveDirectoryUserAccount(UserId, null);
+                    adAccount = ActiveDirectory.RetrieveADUserAccount(UserId);
 
                     if (adAccount == null)
                         throw new ArgumentException(string.Format("Invalid Username: '{0}'; User not found in Active Directory", UserId), "Username");
@@ -251,7 +274,7 @@ namespace Disco.Services.Users
                 var user = adAccount.ToRepositoryUser();
 
                 // Update Repository
-                User existingUser = Database.Users.Find(user.Id);
+                User existingUser = Database.Users.Find(user.UserId);
                 if (existingUser == null)
                     Database.Users.Add(user);
                 else
@@ -261,7 +284,7 @@ namespace Disco.Services.Users
                 }
                 Database.SaveChanges();
 
-                var token = AuthorizationToken.BuildToken(user, adAccount.Groups);
+                var token = AuthorizationToken.BuildToken(user, adAccount.Groups.Select(g => g.Id));
 
                 return new Tuple<User, AuthorizationToken>(user, token);
             }

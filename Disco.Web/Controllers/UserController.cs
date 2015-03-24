@@ -1,9 +1,13 @@
 ﻿using Disco.BI.Extensions;
+using Disco.Models.Services.Jobs.JobLists;
 using Disco.Models.UI.User;
+using Disco.Services;
 using Disco.Services.Authorization;
 using Disco.Services.Authorization.Roles;
+using Disco.Services.Interop.ActiveDirectory;
 using Disco.Services.Plugins.Features.UIExtension;
 using Disco.Services.Users;
+using Disco.Services.Users.UserFlags;
 using Disco.Services.Web;
 using System;
 using System.Linq;
@@ -27,8 +31,13 @@ namespace Disco.Web.Controllers
 
         #region Show
         [DiscoAuthorize(Claims.User.Show)]
-        public virtual ActionResult Show(string id)
+        public virtual ActionResult Show(string id, string Domain)
         {
+            if (string.IsNullOrWhiteSpace(id))
+                throw new ArgumentNullException("id", "The User Id must be provided");
+
+            id = ActiveDirectory.ParseDomainAccountId(id, Domain);
+
             var m = new Models.User.ShowModel();
 
             Database.Configuration.LazyLoadingEnabled = true;
@@ -45,15 +54,21 @@ namespace Disco.Web.Controllers
             }
 
             m.User = Database.Users
-                .Include("DeviceUserAssignments.Device.DeviceModel").Include("UserAttachments")
-                .FirstOrDefault(um => um.Id == id);
+                .Include("DeviceUserAssignments.Device.DeviceModel")
+                .Include("DeviceUserAssignments.Device.DeviceProfile")
+                .Include("DeviceUserAssignments.Device.DeviceBatch")
+                .Include("UserAttachments.TechUser")
+                .Include("UserAttachments.DocumentTemplate")
+                .Include("UserFlagAssignments.AddedUser")
+                .Include("UserFlagAssignments.RemovedUser")
+                .FirstOrDefault(um => um.UserId == id);
 
             if (m.User == null)
                 throw new ArgumentException("Unknown User Id", "id");
 
             if (Authorization.Has(Claims.User.ShowJobs))
             {
-                m.Jobs = new Disco.Models.BI.Job.JobTableModel()
+                m.Jobs = new JobTableModel()
                 {
                     ShowStatus = true,
                     ShowDevice = true,
@@ -62,7 +77,17 @@ namespace Disco.Web.Controllers
                     HideClosedJobs = true,
                     EnablePaging = false
                 };
-                m.Jobs.Fill(Database, BI.JobBI.Searching.BuildJobTableModel(Database).Where(j => j.UserId == id).OrderByDescending(j => j.Id));
+                m.Jobs.Fill(Database, Disco.Services.Searching.Search.BuildJobTableModel(Database).Where(j => j.UserId == id).OrderByDescending(j => j.Id), true);
+            }
+
+            if (Authorization.Has(Claims.User.ShowFlagAssignments))
+            {
+                var usedFlags = m.User.UserFlagAssignments
+                    .Where(a => !a.RemovedDate.HasValue)
+                    .Select(a => a.UserFlagId)
+                    .Distinct().ToList();
+
+                m.AvailableUserFlags = UserFlagService.GetUserFlags().Where(f => !usedFlags.Contains(f.Id)).ToList();
             }
 
             try

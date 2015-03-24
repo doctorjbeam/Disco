@@ -39,21 +39,33 @@
     <Reference Include="EntityFramework">
       <HintPath>..\packages\EntityFramework.5.0.0\lib\net45\EntityFramework.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.AspNet.SignalR.Core, Version=1.1.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Microsoft.AspNet.SignalR.Core.1.1.2\lib\net40\Microsoft.AspNet.SignalR.Core.dll</HintPath>
+    <Reference Include="Exceptionless">
+      <HintPath>..\packages\Exceptionless.1.5.2092\lib\net45\Exceptionless.dll</HintPath>
     </Reference>
-    <Reference Include="Microsoft.AspNet.SignalR.Owin, Version=1.1.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+    <Reference Include="Exceptionless.Models">
+      <HintPath>..\packages\Exceptionless.1.5.2092\lib\net45\Exceptionless.Models.dll</HintPath>
+    </Reference>
+    <Reference Include="LumenWorks.Framework.IO">
+      <HintPath>..\packages\LumenWorks.Framework.IO.3.8.0\lib\net20\LumenWorks.Framework.IO.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.AspNet.SignalR.Core, Version=2.1.1.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Microsoft.AspNet.SignalR.Owin.1.1.2\lib\net45\Microsoft.AspNet.SignalR.Owin.dll</HintPath>
+      <HintPath>..\packages\Microsoft.AspNet.SignalR.Core.2.1.1\lib\net45\Microsoft.AspNet.SignalR.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Owin, Version=2.1.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Microsoft.Owin.2.1.0\lib\net45\Microsoft.Owin.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Owin.Security, Version=2.1.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Microsoft.Owin.Security.2.1.0\lib\net45\Microsoft.Owin.Security.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Web.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <Private>True</Private>
       <HintPath>..\packages\Microsoft.Web.Infrastructure.1.0.0.0\lib\net40\Microsoft.Web.Infrastructure.dll</HintPath>
     </Reference>
-    <Reference Include="Newtonsoft.Json, Version=4.5.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Newtonsoft.Json.5.0.8\lib\net45\Newtonsoft.Json.dll</HintPath>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.6.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="Owin">
       <HintPath>..\packages\Owin.1.0\lib\net40\Owin.dll</HintPath>
@@ -63,7 +75,7 @@
     </Reference>
     <Reference Include="RazorGenerator.Mvc, Version=2.0.0.0, Culture=neutral, PublicKeyToken=7b26dc2a43f6a0d4, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\RazorGenerator.Mvc.2.1.2\lib\net40\RazorGenerator.Mvc.dll</HintPath>
+      <HintPath>..\packages\RazorGenerator.Mvc.2.2.3\lib\net40\RazorGenerator.Mvc.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.DataAnnotations" />
@@ -75,6 +87,30 @@
     </Reference>
     <Reference Include="System.DirectoryServices" />
     <Reference Include="System.IO.Compression" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Net.Http.Extensions">
+      <HintPath>..\packages\Microsoft.Net.Http.2.2.22\lib\net45\System.Net.Http.Extensions.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Net.Http.Primitives">
+      <HintPath>..\packages\Microsoft.Net.Http.2.2.22\lib\net45\System.Net.Http.Primitives.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Net.Http.WebRequest" />
+    <Reference Include="System.Reactive.Core, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-Core.2.2.5\lib\net45\System.Reactive.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reactive.Interfaces, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-Interfaces.2.2.5\lib\net45\System.Reactive.Interfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reactive.Linq, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-Linq.2.2.5\lib\net45\System.Reactive.Linq.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reactive.PlatformServices, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-PlatformServices.2.2.5\lib\net45\System.Reactive.PlatformServices.dll</HintPath>
+    </Reference>
     <Reference Include="System.Web" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Web.Helpers, Version=2.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
@@ -108,7 +144,7 @@
     <Reference Include="System.Xml" />
     <Reference Include="WebActivatorEx, Version=2.0.0.0, Culture=neutral, PublicKeyToken=7b26dc2a43f6a0d4, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\WebActivatorEx.2.0.3\lib\net40\WebActivatorEx.dll</HintPath>
+      <HintPath>..\packages\WebActivatorEx.2.0.5\lib\net40\WebActivatorEx.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -130,10 +166,12 @@
     <Compile Include="Authorization\Roles\ClaimGroups\Configuration\DocumentTemplate\DocumentTemplateClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Configuration\Enrolment\EnrolmentClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Configuration\JobPreferences\JobPreferencesClaims.cs" />
+    <Compile Include="Authorization\Roles\ClaimGroups\Configuration\JobQueue\JobQueueClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Configuration\Logging\LoggingClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Configuration\Origanisation\OrganisationClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Configuration\Plugin\PluginClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Configuration\System\SystemClaims.cs" />
+    <Compile Include="Authorization\Roles\ClaimGroups\Configuration\UserFlag\UserFlagClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Device\DeviceActionsClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Device\DeviceClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Device\DevicePropertiesClaims.cs" />
@@ -142,6 +180,7 @@
     <Compile Include="Authorization\Roles\ClaimGroups\Job\JobNonWarrantyPropertiesClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Job\JobClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Job\JobPropertiesClaims.cs" />
+    <Compile Include="Authorization\Roles\ClaimGroups\Job\JobQueuePropertiesClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Job\JobTypesClaims.cs" />
     <Compile Include="Authorization\Roles\ClaimGroups\Job\JobWarrantyPropertiesClaims.cs" />
     <Compile Include="Authorization\Claims.cs">
@@ -155,6 +194,83 @@
     <Compile Include="Authorization\Roles\RoleCache.cs" />
     <Compile Include="Authorization\Roles\RoleClaims.cs" />
     <Compile Include="Authorization\Roles\RoleToken.cs" />
+    <Compile Include="Devices\Exporting\DeviceExport.cs" />
+    <Compile Include="Devices\Exporting\DeviceExportTask.cs" />
+    <Compile Include="Devices\Exporting\DeviceExportTaskContext.cs" />
+    <Compile Include="Devices\Importing\DeviceImport.cs" />
+    <Compile Include="Devices\Importing\DeviceImportApplyTask.cs" />
+    <Compile Include="Devices\Importing\DeviceImportContext.cs" />
+    <Compile Include="Devices\Importing\DeviceImportDatabaseCache.cs" />
+    <Compile Include="Devices\Importing\DeviceImportFieldBase.cs" />
+    <Compile Include="Devices\Importing\DeviceImportInMemoryCache.cs" />
+    <Compile Include="Devices\Importing\DeviceImportParseTask.cs" />
+    <Compile Include="Devices\Importing\DeviceImportRecord.cs" />
+    <Compile Include="Devices\Importing\Fields\BatchIdImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\AssignedUserIdImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\DeviceAllowUnauthenticatedEnrolImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\DetailBatteryImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\DeviceDecommissionedReasonImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\DeviceDecommissionedDateImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\ProfileIdImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\DetailACAdapterImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\DetailWLanMacAddressImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\DetailLanMacAddressImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\DeviceLocationImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\DeviceAssetNumberImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\DeviceSerialNumberImportField.cs" />
+    <Compile Include="Devices\Importing\Fields\ModelIdImportField.cs" />
+    <Compile Include="Devices\Importing\IDeviceImportCache.cs" />
+    <Compile Include="Devices\DeviceUpdatesHub.cs" />
+    <Compile Include="Devices\ManagedGroups\DeviceBatchAssignedUsersManagedGroup.cs" />
+    <Compile Include="Devices\ManagedGroups\DeviceBatchDevicesManagedGroup.cs" />
+    <Compile Include="Devices\ManagedGroups\DeviceManagedGroups.cs" />
+    <Compile Include="Devices\ManagedGroups\DeviceProfileAssignedUsersManagedGroup.cs" />
+    <Compile Include="Devices\ManagedGroups\DeviceProfileDevicesManagedGroup.cs" />
+    <Compile Include="Extensions\DateTimeExtensions.cs" />
+    <Compile Include="Extensions\EnumerableExtensions.cs" />
+    <Compile Include="Extensions\RxExtensions.cs" />
+    <Compile Include="Extensions\StringExtensions.cs" />
+    <Compile Include="Extensions\UIHelpers.cs" />
+    <Compile Include="Interop\ActiveDirectory\ActiveDirectory.cs" />
+    <Compile Include="Interop\ActiveDirectory\ActiveDirectoryContext.cs" />
+    <Compile Include="Interop\ActiveDirectory\ActiveDirectoryExtensions.cs" />
+    <Compile Include="Interop\ActiveDirectory\ActiveDirectoryGroupCache.cs" />
+    <Compile Include="Interop\ActiveDirectory\ActiveDirectoryManagedGroups.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADDirectoryEntry.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADDiscoverForestServers.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADDomain.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADDomainController.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADGroup.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADHelpers.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADMachineAccount.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADManagedGroup.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADManagedGroupsSyncTask.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADOrganisationalUnit.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADSearchResult.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADSite.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADNetworkLogonDatesUpdateTask.cs" />
+    <Compile Include="Interop\ActiveDirectory\ADUserAccount.cs" />
+    <Compile Include="Interop\ActiveDirectory\Description.cs" />
+    <Compile Include="Interop\ActiveDirectory\IADObject.cs" />
+    <Compile Include="Interop\DiscoServices\DiscoServiceHelpers.cs" />
+    <Compile Include="Interop\DiscoServices\Jobs.cs" />
+    <Compile Include="Interop\DiscoServices\PluginLibrary.cs" />
+    <Compile Include="Interop\DiscoServices\PluginLibraryUpdateTask.cs" />
+    <Compile Include="Interop\VicEduDept\VicSmart.cs" />
+    <Compile Include="Interop\DiscoServices\UpdateQuery.cs" />
+    <Compile Include="Interop\DiscoServices\UpdateQueryTask.cs" />
+    <Compile Include="Jobs\JobExtensions.cs" />
+    <Compile Include="Jobs\JobLists\JobTableExtensions.cs" />
+    <Compile Include="Jobs\JobQueues\Cache.cs" />
+    <Compile Include="Jobs\JobQueues\JobQueueDeleteTask.cs" />
+    <Compile Include="Jobs\JobQueues\JobQueueService.cs" />
+    <Compile Include="Jobs\JobQueues\JobQueueToken.cs" />
+    <Compile Include="Jobs\JobLists\ManagedJobList.cs" />
+    <Compile Include="Jobs\JobUpdatesHub.cs" />
+    <Compile Include="Jobs\Noticeboards\HeldDeviceItem.cs" />
+    <Compile Include="Jobs\Noticeboards\NoticeboardUpdatesHub.cs" />
+    <Compile Include="Jobs\Noticeboards\HeldDevices.cs" />
+    <Compile Include="Jobs\Noticeboards\HeldDevicesForUsers.cs" />
     <Compile Include="Logging\LogBase.cs" />
     <Compile Include="Logging\LogContext.cs" />
     <Compile Include="Logging\LogReInitalizeJob.cs" />
@@ -164,11 +280,11 @@
     <Compile Include="Logging\Models\LogModule.cs" />
     <Compile Include="Logging\ReadLogContext.cs" />
     <Compile Include="Logging\SystemLog.cs" />
-    <Compile Include="Logging\Targets\LogLiveContext.cs" />
-    <Compile Include="Logging\Targets\LogPersistContext.cs" />
-    <Compile Include="Logging\Targets\LogPersistContextInitializer.cs" />
+    <Compile Include="Logging\Persistance\LogPersistContext.cs" />
+    <Compile Include="Logging\Persistance\LogPersistContextInitializer.cs" />
     <Compile Include="Logging\Utilities.cs" />
-    <Compile Include="Plugins\CommunityInterop\PluginLibraryUpdateTask.cs" />
+    <Compile Include="Plugins\Features\RepairProvider\RepairProviderFeature.cs" />
+    <Compile Include="Plugins\Features\RepairProvider\RepairProviderSubmitJobException.cs" />
     <Compile Include="Plugins\Features\UIExtension\Results\LiteralResult.cs" />
     <Compile Include="Plugins\Features\UIExtension\Results\MultipleResult.cs" />
     <Compile Include="Plugins\Features\UIExtension\Results\PluginResourceCssResult.cs" />
@@ -205,7 +321,11 @@
     <Compile Include="Plugins\PluginWebViewPage.cs" />
     <Compile Include="Plugins\WebPageHelper.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Searching\Search.cs" />
+    <Compile Include="Tasks\IScheduledTaskStatus.cs" />
     <Compile Include="Tasks\ScheduledTask.cs" />
+    <Compile Include="Tasks\ScheduledTaskMockStatus.cs" />
+    <Compile Include="Tasks\ScheduledTaskNotificationsHub.cs" />
     <Compile Include="Tasks\ScheduledTasks.cs" />
     <Compile Include="Tasks\ScheduledTasksLog.cs" />
     <Compile Include="Tasks\ScheduledTaskStatus.cs" />
@@ -213,19 +333,32 @@
     <Compile Include="Plugins\Features\UIExtension\UIExtensions.cs" />
     <Compile Include="Users\Cache.cs" />
     <Compile Include="Users\CacheCleanTask.cs" />
-    <Compile Include="Users\Searching.cs" />
+    <Compile Include="Users\UserExtensions.cs" />
+    <Compile Include="Users\UserFlags\Cache.cs" />
+    <Compile Include="Users\UserFlags\UserFlagUserDevicesManagedGroup.cs" />
+    <Compile Include="Users\UserFlags\UserFlagUsersManagedGroup.cs" />
+    <Compile Include="Users\UserFlags\UserFlagsBulkAssignTask.cs" />
+    <Compile Include="Users\UserFlags\UserFlagsDeleteTask.cs" />
+    <Compile Include="Users\UserFlags\UserFlagService.cs" />
     <Compile Include="Users\UserService.cs" />
+    <Compile Include="Users\UserUpdatesHub.cs" />
     <Compile Include="Web\AuthorizedController.cs" />
     <Compile Include="Web\AuthorizedDatabaseController.cs" />
     <Compile Include="Web\BaseController.cs" />
-    <Compile Include="Web\Bundles\Bundle.cs" />
+    <Compile Include="Web\Bundles\FileBundle.cs" />
+    <Compile Include="Web\Bundles\IBundle.cs" />
     <Compile Include="Web\Bundles\BundleExtensions.cs" />
     <Compile Include="Web\Bundles\BundleHandler.cs" />
     <Compile Include="Web\Bundles\BundleModule.cs" />
     <Compile Include="Web\Bundles\BundleTable.cs" />
+    <Compile Include="Web\Bundles\UrlBundle.cs" />
     <Compile Include="Web\DatabaseController.cs" />
     <Compile Include="Web\HandleErrorAttribute.cs" />
     <Compile Include="Web\HelperExtensions.cs" />
+    <Compile Include="Web\Signalling\DiscoHubAuthorizeAllAttribute.cs" />
+    <Compile Include="Web\Signalling\DiscoHubAuthorizeAnyAttribute.cs" />
+    <Compile Include="Web\Signalling\DiscoHubAuthorizeAttribute.cs" />
+    <Compile Include="Logging\LogNotificationsHub.cs" />
     <Compile Include="Web\WebViewPage.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -251,11 +384,6 @@
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <ProjectExtensions>
-    <VisualStudio>
-      <UserProperties BuildVersion_UseGlobalSettings="False" BuildVersion_DetectChanges="False" BuildVersion_BuildAction="Both" BuildVersion_StartDate="2011/7/1" BuildVersion_BuildVersioningStyle="None.DeltaBaseYear.MonthAndDayStamp.TimeStamp" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_UpdateFileVersion="True" />
-    </VisualStudio>
-  </ProjectExtensions>
   <PropertyGroup>
     <PostBuildEvent>
     if not exist "$(TargetDir)x86" md "$(TargetDir)x86"
@@ -263,7 +391,11 @@
     if not exist "$(TargetDir)amd64" md "$(TargetDir)amd64"
     xcopy /s /y "$(SolutionDir)packages\Microsoft.SqlServer.Compact.4.0.8876.1\NativeBinaries\amd64\*.*" "$(TargetDir)amd64"</PostBuildEvent>
   </PropertyGroup>
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
+  <Import Project="..\packages\Microsoft.Bcl.Build.1.0.14\tools\Microsoft.Bcl.Build.targets" Condition="Exists('..\packages\Microsoft.Bcl.Build.1.0.14\tools\Microsoft.Bcl.Build.targets')" />
+  <Target Name="EnsureBclBuildImported" BeforeTargets="BeforeBuild" Condition="'$(BclBuildImported)' == ''">
+    <Error Condition="!Exists('..\packages\Microsoft.Bcl.Build.1.0.14\tools\Microsoft.Bcl.Build.targets')" Text="This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=317567." HelpKeyword="BCLBUILD2001" />
+    <Error Condition="Exists('..\packages\Microsoft.Bcl.Build.1.0.14\tools\Microsoft.Bcl.Build.targets')" Text="The build restored NuGet packages. Build the project again to include these packages in the build. For more information, see http://go.microsoft.com/fwlink/?LinkID=317568." HelpKeyword="BCLBUILD2002" />
+  </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

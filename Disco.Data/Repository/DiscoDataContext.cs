@@ -23,6 +23,8 @@ namespace Disco.Data.Repository
 
         public virtual DbSet<User> Users { get; set; }
         public virtual DbSet<UserAttachment> UserAttachments { get; set; }
+        public virtual DbSet<UserFlag> UserFlags { get; set; }
+        public virtual DbSet<UserFlagAssignment> UserFlagAssignments { get; set; }
         public virtual DbSet<AuthorizationRole> AuthorizationRoles { get; set; }
 
         public virtual DbSet<DeviceUserAssignment> DeviceUserAssignments { get; set; }
@@ -48,6 +50,9 @@ namespace Disco.Data.Repository
         public virtual DbSet<JobMetaNonWarranty> JobMetaNonWarranties { get; set; }
         public virtual DbSet<JobMetaInsurance> JobMetaInsurances { get; set; }
 
+        public virtual DbSet<JobQueue> JobQueues { get; set; }
+        public virtual DbSet<JobQueueJob> JobQueueJobs { get; set; }
+
         public Configuration.SystemConfiguration DiscoConfiguration
         {
             get
@@ -62,6 +67,7 @@ namespace Disco.Data.Repository
 
             modelBuilder.Entity<DeviceComponent>().HasMany(m => m.JobSubTypes).WithMany(m => m.DeviceComponents).Map(m => m.ToTable("DeviceComponents_JobSubTypes"));
             modelBuilder.Entity<DocumentTemplate>().HasMany(m => m.JobSubTypes).WithMany(m => m.AttachmentTypes).Map(m => m.ToTable("DocumentTemplates_JobSubTypes"));
+            modelBuilder.Entity<JobQueue>().HasMany(m => m.JobSubTypes).WithMany(m => m.JobQueues).Map(m => m.ToTable("JobQueues_JobSubTypes"));
 
             modelBuilder.Entity<Job>().HasMany(m => m.JobSubTypes).WithMany(m => m.Jobs).Map(m => m.ToTable("Jobs_JobSubTypes"));
             modelBuilder.Entity<User>().HasMany(m => m.Jobs).WithOptional(m => m.User);

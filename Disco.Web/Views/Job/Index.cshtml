@@ -1,7 +1,7 @@
 ﻿@model Disco.Web.Models.Job.IndexModel
 @{
     ViewBag.Title = "Jobs";
-    
+
     if (Authorization.Has(Claims.Job.ShowDailyChart))
     {
         Html.BundleDeferred("~/ClientScripts/Modules/Highcharts");
@@ -52,9 +52,12 @@
                                 chart: {
                                     renderTo: 'chartHostJobDailyOpenedClosed',
                                     height: 175,
-                                    animation: false
+                                    animation: false,
+                                    style: {
+                                        fontFamily: '"Segoe UI", Arial, Verdana, Tahoma, sans-serif'
+                                    }
                                 },
-                                colors: ['#BBBBBB', '#005fab', '#DB761D'],
+                                colors: ['#BBBBBB', '#005fab', '#60ab1e'],
                                 title: {
                                     text: null
                                 },
@@ -71,7 +74,11 @@
                                     verticalAlign: 'top',
                                     y: 0,
                                     floating: true,
-                                    borderWidth: 0
+                                    borderWidth: 0,
+                                    itemStyle: {
+                                        color: '#333',
+                                        fontWeight: 'normal'
+                                    }
                                 },
                                 xAxis: {
                                     type: 'datetime',
@@ -124,13 +131,17 @@
         </div>
     }
 </div>
-@if (Authorization.Has(Claims.Job.Lists.AwaitingTechnicianAction))
+@if (Authorization.Has(Claims.Job.Lists.MyJobs))
 {
-    <h2>Open Jobs Awaiting Technician Action (@Model.OpenJobs.Items.Count)</h2>
-    @Html.Partial(MVC.Shared.Views._JobTable, Model.OpenJobs, new ViewDataDictionary())
+    <div id="Jobs_Index_MyJobs">
+        <h2>My Jobs (@Model.MyJobs.Items.Count())</h2>
+        @Html.Partial(MVC.Shared.Views._JobTable, Model.MyJobs, new ViewDataDictionary())
+    </div>
 }
-@if (Authorization.Has(Claims.Job.Lists.LongRunningJobs))
+@if (Authorization.Has(Claims.Job.Lists.StaleJobs))
 {
-    <h2>Long Running Jobs (@Model.LongRunningJobs.Items.Count)</h2>
-    @Html.Partial(MVC.Shared.Views._JobTable, Model.LongRunningJobs, new ViewDataDictionary())
+    <div id="Jobs_Index_StaleJobs">
+        <h2>Stale Jobs (@Model.StaleJobs.Items.Count())</h2>
+        @Html.Partial(MVC.Shared.Views._JobTable, Model.StaleJobs, new ViewDataDictionary())
+    </div>
 }

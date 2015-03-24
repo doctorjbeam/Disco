@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Disco.Models.Repository;
+﻿using Disco.BI.DocumentTemplateBI;
 using Disco.Data.Repository;
-using System.IO;
-using Disco.BI.DocumentTemplateBI;
+using Disco.Models.Repository;
+using Disco.Services.Logging;
 using Disco.Services.Users;
+using Exceptionless;
+using System;
+using System.IO;
 
 namespace Disco.BI.Extensions
 {
@@ -15,15 +14,15 @@ namespace Disco.BI.Extensions
 
         public static bool ImportPdfAttachment(this DocumentUniqueIdentifier UniqueIdentifier, DiscoDataContext Database, System.IO.Stream PdfContent, byte[] PdfThumbnail)
         {
-
             UniqueIdentifier.LoadComponents(Database);
             DocumentTemplate documentTemplate = UniqueIdentifier.DocumentTemplate;
             string filename;
             string comments;
+            object attachment;
 
             if (documentTemplate == null)
             {
-                filename = string.Format("{0}_{1:yyyyMMdd-HHmmss}.pdf", UniqueIdentifier.DataId, UniqueIdentifier.TimeStamp);
+                filename = string.Format("{0}_{1:yyyyMMdd-HHmmss}.pdf", UniqueIdentifier.DataId.Replace('\\', '_'), UniqueIdentifier.TimeStamp);
                 comments = string.Format("Uploaded: {0:s}", UniqueIdentifier.TimeStamp);
             }
             else
@@ -42,20 +41,33 @@ namespace Disco.BI.Extensions
             {
                 case DocumentTemplate.DocumentTemplateScopes.Device:
                     Device d = (Device)UniqueIdentifier.Data;
-                    d.CreateAttachment(Database, creatorUser, filename, DocumentTemplate.PdfMimeType, comments, PdfContent, documentTemplate, PdfThumbnail);
-                    return true;
+                    attachment = d.CreateAttachment(Database, creatorUser, filename, DocumentTemplate.PdfMimeType, comments, PdfContent, documentTemplate, PdfThumbnail);
+                    break;
                 case DocumentTemplate.DocumentTemplateScopes.Job:
                     Job j = (Job)UniqueIdentifier.Data;
-                    j.CreateAttachment(Database, creatorUser, filename, DocumentTemplate.PdfMimeType, comments, PdfContent, documentTemplate, PdfThumbnail);
-                    return true;
+                    attachment = j.CreateAttachment(Database, creatorUser, filename, DocumentTemplate.PdfMimeType, comments, PdfContent, documentTemplate, PdfThumbnail);
+                    break;
                 case DocumentTemplate.DocumentTemplateScopes.User:
                     User u = (User)UniqueIdentifier.Data;
-                    u.CreateAttachment(Database, creatorUser, filename, DocumentTemplate.PdfMimeType, comments, PdfContent, documentTemplate, PdfThumbnail);
-                    return true;
+                    attachment = u.CreateAttachment(Database, creatorUser, filename, DocumentTemplate.PdfMimeType, comments, PdfContent, documentTemplate, PdfThumbnail);
+                    break;
                 default:
                     return false;
             }
 
+            if (documentTemplate != null && !string.IsNullOrWhiteSpace(documentTemplate.OnImportAttachmentExpression))
+            {
+                try
+                {
+                    var expressionResult = documentTemplate.EvaluateOnAttachmentImportExpression(attachment, Database, creatorUser, UniqueIdentifier.TimeStamp);
+                    DocumentsLog.LogImportAttachmentExpressionEvaluated(documentTemplate, UniqueIdentifier.Data, attachment, expressionResult);
+                }
+                catch (Exception ex)
+                {
+                    SystemLog.LogException("Document Importer - OnImportAttachmentExpression", ex);
+                }
+            }
+            return true;
         }
 
         public static string RepositoryFilename(this DeviceAttachment da, DiscoDataContext Database)
@@ -68,7 +80,7 @@ namespace Disco.BI.Extensions
         }
         public static string RepositoryFilename(this UserAttachment ua, DiscoDataContext Database)
         {
-            return Path.Combine(DataStore.CreateLocation(Database, "UserAttachments", ua.Timestamp), string.Format("{0}_{1}_file", ua.UserId, ua.Id));
+            return Path.Combine(DataStore.CreateLocation(Database, "UserAttachments", ua.Timestamp), string.Format("{0}_{1}_file", ua.UserId.Replace('\\', '_'), ua.Id));
         }
 
         private static string RepositoryThumbnailFilenameInternal(string DirectoryPath, string Filename)
@@ -85,7 +97,7 @@ namespace Disco.BI.Extensions
         }
         public static string RepositoryThumbnailFilename(this UserAttachment ua, DiscoDataContext Database)
         {
-            return RepositoryThumbnailFilenameInternal(DataStore.CreateLocation(Database, "UserAttachments", ua.Timestamp), string.Format("{0}_{1}_thumb.jpg", ua.UserId, ua.Id));
+            return RepositoryThumbnailFilenameInternal(DataStore.CreateLocation(Database, "UserAttachments", ua.Timestamp), string.Format("{0}_{1}_thumb.jpg", ua.UserId.Replace('\\', '_'), ua.Id));
         }
 
         public static void RepositoryDelete(this DeviceAttachment da, DiscoDataContext Database)

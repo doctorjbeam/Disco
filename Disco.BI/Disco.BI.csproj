@@ -43,38 +43,16 @@
     <Reference Include="EntityFramework">
       <HintPath>..\packages\EntityFramework.5.0.0\lib\net45\EntityFramework.dll</HintPath>
     </Reference>
+    <Reference Include="Exceptionless, Version=1.5.2092.0, Culture=neutral, PublicKeyToken=fc181f0a46f65747, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Exceptionless.1.5.2092\lib\net45\Exceptionless.dll</HintPath>
+    </Reference>
+    <Reference Include="Exceptionless.Models, Version=1.5.2092.0, Culture=neutral, PublicKeyToken=fc181f0a46f65747, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Exceptionless.1.5.2092\lib\net45\Exceptionless.Models.dll</HintPath>
+    </Reference>
     <Reference Include="itextsharp">
       <HintPath>..\Resources\Libraries\iTextSharp\itextsharp.dll</HintPath>
-    </Reference>
-    <Reference Include="LumenWorks.Framework.IO, Version=3.8.0.0, Culture=neutral, PublicKeyToken=5ad3ea2f85776344, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\Resources\Libraries\LumenWorks.Framework.IO\LumenWorks.Framework.IO.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.AspNet.SignalR.Core, Version=1.1.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Microsoft.AspNet.SignalR.Core.1.1.2\lib\net40\Microsoft.AspNet.SignalR.Core.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.AspNet.SignalR.Owin, Version=1.1.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Microsoft.AspNet.SignalR.Owin.1.1.2\lib\net45\Microsoft.AspNet.SignalR.Owin.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.AspNet.SignalR.SystemWeb, Version=1.1.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Microsoft.AspNet.SignalR.SystemWeb.1.1.2\lib\net45\Microsoft.AspNet.SignalR.SystemWeb.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.Owin.Host.SystemWeb">
-      <HintPath>..\packages\Microsoft.Owin.Host.SystemWeb.1.0.1\lib\net45\Microsoft.Owin.Host.SystemWeb.dll</HintPath>
-    </Reference>
-    <Reference Include="Microsoft.Web.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <Private>True</Private>
-      <HintPath>..\packages\Microsoft.Web.Infrastructure.1.0.0.0\lib\net40\Microsoft.Web.Infrastructure.dll</HintPath>
-    </Reference>
-    <Reference Include="Newtonsoft.Json, Version=4.5.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Newtonsoft.Json.5.0.8\lib\net45\Newtonsoft.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="Owin">
-      <HintPath>..\packages\Owin.1.0\lib\net40\Owin.dll</HintPath>
     </Reference>
     <Reference Include="Quartz">
       <HintPath>..\Resources\Libraries\Quartz\Quartz.dll</HintPath>
@@ -89,20 +67,29 @@
     <Reference Include="System.DirectoryServices" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Management" />
-    <Reference Include="System.Reactive.Core, Version=2.1.30214.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Rx-Core.2.1.30214.0\lib\Net45\System.Reactive.Core.dll</HintPath>
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Net.Http.Extensions">
+      <HintPath>..\packages\Microsoft.Net.Http.2.2.22\lib\net45\System.Net.Http.Extensions.dll</HintPath>
     </Reference>
-    <Reference Include="System.Reactive.Interfaces, Version=2.1.30214.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Rx-Interfaces.2.1.30214.0\lib\Net45\System.Reactive.Interfaces.dll</HintPath>
+    <Reference Include="System.Net.Http.Primitives">
+      <HintPath>..\packages\Microsoft.Net.Http.2.2.22\lib\net45\System.Net.Http.Primitives.dll</HintPath>
     </Reference>
-    <Reference Include="System.Reactive.Linq, Version=2.1.30214.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+    <Reference Include="System.Net.Http.WebRequest" />
+    <Reference Include="System.Reactive.Core, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Rx-Linq.2.1.30214.0\lib\Net45\System.Reactive.Linq.dll</HintPath>
+      <HintPath>..\packages\Rx-Core.2.2.5\lib\net45\System.Reactive.Core.dll</HintPath>
     </Reference>
-    <Reference Include="System.Reactive.PlatformServices">
-      <HintPath>..\packages\Rx-PlatformServices.2.1.30214.0\lib\Net45\System.Reactive.PlatformServices.dll</HintPath>
+    <Reference Include="System.Reactive.Interfaces, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-Interfaces.2.2.5\lib\net45\System.Reactive.Interfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reactive.Linq, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-Linq.2.2.5\lib\net45\System.Reactive.Linq.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reactive.PlatformServices, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-PlatformServices.2.2.5\lib\net45\System.Reactive.PlatformServices.dll</HintPath>
     </Reference>
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.ServiceModel" />
@@ -124,14 +111,12 @@
     <Compile Include="BI\AttachmentBI\Utilities.cs" />
     <Compile Include="BI\DeviceBI\BatchUtilities.cs" />
     <Compile Include="BI\DeviceBI\DeviceModelBI.cs" />
-    <Compile Include="BI\DeviceBI\Importing\Export.cs" />
-    <Compile Include="BI\DeviceBI\Importing\Import.cs" />
-    <Compile Include="BI\DeviceBI\Importing\ImportParseTask.cs" />
-    <Compile Include="BI\DeviceBI\Importing\ImportProcessTask.cs" />
     <Compile Include="BI\DeviceBI\Migration\LogMacAddressImporting.cs" />
-    <Compile Include="BI\DeviceBI\Searching.cs" />
     <Compile Include="BI\DisposableImageCollection.cs" />
     <Compile Include="BI\DocumentTemplateBI\DocumentTemplateQRCodeLocationCache.cs" />
+    <Compile Include="BI\DocumentTemplateBI\ManagedGroups\DocumentTemplateUsersManagedGroup.cs" />
+    <Compile Include="BI\DocumentTemplateBI\ManagedGroups\DocumentTemplateDevicesManagedGroup.cs" />
+    <Compile Include="BI\DocumentTemplateBI\ManagedGroups\DocumentTemplateManagedGroups.cs" />
     <Compile Include="BI\Expressions\EvaluateExpressionParseException.cs" />
     <Compile Include="BI\Expressions\ExpressionCachePreloadTask.cs" />
     <Compile Include="BI\Expressions\Extensions\DataExt.cs" />
@@ -146,6 +131,7 @@
     <Compile Include="BI\Extensions\AttachmentExtensions.cs" />
     <Compile Include="BI\Extensions\AuthorizationRoleExtensions.cs" />
     <Compile Include="BI\Extensions\ClientServicesExtensions.cs" />
+    <Compile Include="BI\Extensions\UserFlagActionExtensions.cs" />
     <Compile Include="BI\Extensions\DeviceActionExtensions.cs" />
     <Compile Include="BI\Extensions\DeviceBatchExtensions.cs" />
     <Compile Include="BI\Extensions\DeviceCertificateExtensions.cs" />
@@ -155,7 +141,7 @@
     <Compile Include="BI\Extensions\JobActionExtensions.cs" />
     <Compile Include="BI\Extensions\JobExtensions.cs" />
     <Compile Include="BI\Extensions\JobFlagExtensions.cs" />
-    <Compile Include="BI\Extensions\JobTableExtensions.cs" />
+    <Compile Include="BI\Extensions\JobQueueActionExtensions.cs" />
     <Compile Include="BI\Extensions\UserExtensions.cs" />
     <Compile Include="BI\Extensions\WirelessCertificateExtensions.cs" />
     <Compile Include="BI\Extensions\DeviceExtensions.cs" />
@@ -174,33 +160,13 @@
     <Compile Include="BI\DocumentTemplateBI\Importer\DocumentDropBoxMonitor.cs" />
     <Compile Include="BI\DocumentTemplateBI\Importer\DocumentImporterJob.cs" />
     <Compile Include="BI\DocumentTemplateBI\Importer\DocumentImporterCleanCacheJob.cs" />
-    <Compile Include="BI\DocumentTemplateBI\Importer\DocumentImporterLog.cs" />
-    <Compile Include="BI\Interop\ActiveDirectory\ActiveDirectory.cs" />
-    <Compile Include="BI\Interop\ActiveDirectory\ActiveDirectoryCachedGroups.cs" />
-    <Compile Include="BI\Interop\ActiveDirectory\ActiveDirectoryGroupExtensions.cs" />
-    <Compile Include="BI\Interop\ActiveDirectory\ActiveDirectoryHelpers.cs" />
-    <Compile Include="BI\Interop\ActiveDirectory\ActiveDirectoryMachineAccountExtensions.cs" />
-    <Compile Include="BI\Interop\ActiveDirectory\ActiveDirectoryOrganisationalUnit.cs" />
-    <Compile Include="BI\Interop\ActiveDirectory\ActiveDirectoryUpdateLastNetworkLogonDateJob.cs" />
-    <Compile Include="BI\Interop\ActiveDirectory\ActiveDirectoryUserAccountExtensions.cs" />
+    <Compile Include="BI\DocumentTemplateBI\DocumentsLog.cs" />
     <Compile Include="BI\Expressions\ExpressionCache.cs" />
-    <Compile Include="BI\Interop\Community\UpdateCheck.cs" />
-    <Compile Include="BI\Interop\Community\UpdateCheckTask.cs" />
     <Compile Include="BI\Interop\MimeTypes.cs" />
     <Compile Include="BI\Interop\Pdf\PdfGenerator.cs" />
     <Compile Include="BI\Interop\Pdf\PdfImporter.cs" />
-    <Compile Include="BI\Interop\SignalRHandlers\AuthorizedPersistentConnection.cs" />
-    <Compile Include="BI\Interop\SignalRHandlers\HeldDeviceNotifications.cs" />
-    <Compile Include="BI\Interop\SignalRHandlers\LogNotifications.cs" />
-    <Compile Include="BI\Interop\SignalRHandlers\RepositoryMonitorNotifications.cs" />
-    <Compile Include="BI\Interop\SignalRHandlers\ScheduledTasksStatusNotifications.cs" />
-    <Compile Include="BI\Interop\SignalRHandlers\SignalRAuthenticationWorkaround.cs" />
-    <Compile Include="BI\Interop\SignalRHandlers\UserHeldDeviceNotifications.cs" />
-    <Compile Include="BI\JobBI\ManagedJobList.cs" />
-    <Compile Include="BI\JobBI\Searching.cs" />
     <Compile Include="BI\JobBI\Statistics\DailyOpenedClosed.cs" />
     <Compile Include="BI\JobBI\Utilities.cs" />
-    <Compile Include="BI\UserBI\Searching.cs" />
     <Compile Include="BI\Extensions\UtilityExtensions.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
@@ -231,6 +197,7 @@
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
@@ -253,12 +220,11 @@
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <ProjectExtensions>
-    <VisualStudio>
-      <UserProperties BuildVersion_StartDate="2011/7/1" BuildVersion_BuildAction="Both" BuildVersion_DetectChanges="False" BuildVersion_UseGlobalSettings="False" BuildVersion_BuildVersioningStyle="None.DeltaBaseYear.MonthAndDayStamp.TimeStamp" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_UpdateFileVersion="True" />
-    </VisualStudio>
-  </ProjectExtensions>
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
+  <Import Project="..\packages\Microsoft.Bcl.Build.1.0.14\tools\Microsoft.Bcl.Build.targets" Condition="Exists('..\packages\Microsoft.Bcl.Build.1.0.14\tools\Microsoft.Bcl.Build.targets')" />
+  <Target Name="EnsureBclBuildImported" BeforeTargets="BeforeBuild" Condition="'$(BclBuildImported)' == ''">
+    <Error Condition="!Exists('..\packages\Microsoft.Bcl.Build.1.0.14\tools\Microsoft.Bcl.Build.targets')" Text="This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=317567." HelpKeyword="BCLBUILD2001" />
+    <Error Condition="Exists('..\packages\Microsoft.Bcl.Build.1.0.14\tools\Microsoft.Bcl.Build.targets')" Text="The build restored NuGet packages. Build the project again to include these packages in the build. For more information, see http://go.microsoft.com/fwlink/?LinkID=317568." HelpKeyword="BCLBUILD2002" />
+  </Target>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

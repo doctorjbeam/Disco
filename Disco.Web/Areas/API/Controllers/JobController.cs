@@ -1,6 +1,9 @@
 ﻿using Disco.BI.Extensions;
 using Disco.Models.Repository;
+using Disco.Models.Services.Jobs.JobLists;
+using Disco.Services;
 using Disco.Services.Authorization;
+using Disco.Services.Jobs.JobLists;
 using Disco.Services.Users;
 using Disco.Services.Web;
 using Disco.Web.Extensions;
@@ -522,17 +525,27 @@ namespace Disco.Web.Areas.API.Controllers
         }
         private void UpdateDeviceHeldLocation(Job job, string DeviceHeldLocation)
         {
+            if (!string.IsNullOrWhiteSpace(DeviceHeldLocation) &&
+                Database.DiscoConfiguration.JobPreferences.LocationMode == Disco.Models.BI.Job.LocationModes.RestrictedList)
+            {
+                // Enforce Restricted List Mode
+                var value = DeviceHeldLocation.Trim();
+
+                if (!Database.DiscoConfiguration.JobPreferences.LocationList.Contains(value, StringComparer.OrdinalIgnoreCase))
+                    throw new ArgumentException("The location was not found in the list (Mode: Restricted List)");
+            }
+
             if (string.IsNullOrWhiteSpace(DeviceHeldLocation))
                 job.DeviceHeldLocation = null;
             else
-                job.DeviceHeldLocation = DeviceHeldLocation;
+                job.DeviceHeldLocation = DeviceHeldLocation.Trim();
 
             Database.SaveChanges();
         }
         private void UpdateFlags(Job job, string Flags)
         {
             // Only User Management Job Supports Flags at the moment
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.UMgmt, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.UMgmt, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for User Management Jobs");
             }
@@ -589,7 +602,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateNonWarrantyIsInsuranceClaim(Job job, string IsInsuranceClaim)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -628,7 +641,7 @@ namespace Disco.Web.Areas.API.Controllers
         private Models.Job._DateChangeModel UpdateNonWarrantyAccountingChargeRequired(Job job, string AccountingChargeRequiredDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -650,7 +663,7 @@ namespace Disco.Web.Areas.API.Controllers
                     throw new Exception("Invalid Date Format");
                 }
             }
-            job.JobMetaNonWarranty.AccountingChargeRequiredUserId = CurrentUser.Id;
+            job.JobMetaNonWarranty.AccountingChargeRequiredUserId = CurrentUser.UserId;
             Database.SaveChanges();
             return new Models.Job._DateChangeModel()
             {
@@ -662,7 +675,7 @@ namespace Disco.Web.Areas.API.Controllers
         private Models.Job._DateChangeModel UpdateNonWarrantyAccountingChargeAdded(Job job, string AccountingChargeAddedDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -684,7 +697,7 @@ namespace Disco.Web.Areas.API.Controllers
                     throw new Exception("Invalid Date Format");
                 }
             }
-            job.JobMetaNonWarranty.AccountingChargeAddedUserId = CurrentUser.Id;
+            job.JobMetaNonWarranty.AccountingChargeAddedUserId = CurrentUser.UserId;
             Database.SaveChanges();
             return new Models.Job._DateChangeModel()
             {
@@ -696,7 +709,7 @@ namespace Disco.Web.Areas.API.Controllers
         private Models.Job._DateChangeModel UpdateNonWarrantyAccountingChargePaid(Job job, string AccountingChargePaidDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -718,7 +731,7 @@ namespace Disco.Web.Areas.API.Controllers
                     throw new Exception("Invalid Date Format");
                 }
             }
-            job.JobMetaNonWarranty.AccountingChargePaidUserId = CurrentUser.Id;
+            job.JobMetaNonWarranty.AccountingChargePaidUserId = CurrentUser.UserId;
             Database.SaveChanges();
             return new Models.Job._DateChangeModel()
             {
@@ -730,7 +743,7 @@ namespace Disco.Web.Areas.API.Controllers
         private Models.Job._DateChangeModel UpdateNonWarrantyPurchaseOrderRaised(Job job, string PurchaseOrderRaisedDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -752,7 +765,7 @@ namespace Disco.Web.Areas.API.Controllers
                     throw new Exception("Invalid Date Format");
                 }
             }
-            job.JobMetaNonWarranty.PurchaseOrderRaisedUserId = CurrentUser.Id;
+            job.JobMetaNonWarranty.PurchaseOrderRaisedUserId = CurrentUser.UserId;
             Database.SaveChanges();
             return new Models.Job._DateChangeModel()
             {
@@ -773,7 +786,7 @@ namespace Disco.Web.Areas.API.Controllers
         private Models.Job._DateChangeModel UpdateNonWarrantyPurchaseOrderSent(Job job, string PurchaseOrderSentDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -795,7 +808,7 @@ namespace Disco.Web.Areas.API.Controllers
                     throw new Exception("Invalid Date Format");
                 }
             }
-            job.JobMetaNonWarranty.PurchaseOrderSentUserId = CurrentUser.Id;
+            job.JobMetaNonWarranty.PurchaseOrderSentUserId = CurrentUser.UserId;
             Database.SaveChanges();
             return new Models.Job._DateChangeModel()
             {
@@ -807,7 +820,7 @@ namespace Disco.Web.Areas.API.Controllers
         private Models.Job._DateChangeModel UpdateNonWarrantyInvoiceReceived(Job job, string InvoiceReceivedDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -829,7 +842,7 @@ namespace Disco.Web.Areas.API.Controllers
                     throw new Exception("Invalid Date Format");
                 }
             }
-            job.JobMetaNonWarranty.InvoiceReceivedUserId = CurrentUser.Id;
+            job.JobMetaNonWarranty.InvoiceReceivedUserId = CurrentUser.UserId;
             Database.SaveChanges();
             return new Models.Job._DateChangeModel()
             {
@@ -842,7 +855,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateNonWarrantyRepairerName(Job job, string RepairerName)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -860,7 +873,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateNonWarrantyRepairerLoggedDate(Job job, string RepairerLoggedDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -871,7 +884,7 @@ namespace Disco.Web.Areas.API.Controllers
             }
             else
             {
-                if (RepairerLoggedDate.Equals("Now", StringComparison.InvariantCultureIgnoreCase))
+                if (RepairerLoggedDate.Equals("Now", StringComparison.OrdinalIgnoreCase))
                 {
                     job.JobMetaNonWarranty.RepairerLoggedDate = DateTime.Now;
                 }
@@ -893,7 +906,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateNonWarrantyRepairerReference(Job job, string RepairerReference)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -911,7 +924,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateNonWarrantyRepairerCompletedDate(Job job, string RepairerCompletedDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -922,7 +935,7 @@ namespace Disco.Web.Areas.API.Controllers
             }
             else
             {
-                if (RepairerCompletedDate.Equals("Now", StringComparison.InvariantCultureIgnoreCase))
+                if (RepairerCompletedDate.Equals("Now", StringComparison.OrdinalIgnoreCase))
                 {
                     job.JobMetaNonWarranty.RepairerCompletedDate = DateTime.Now;
                 }
@@ -949,7 +962,7 @@ namespace Disco.Web.Areas.API.Controllers
         private Models.Job._DateChangeModel UpdateInsuranceClaimFormSentDate(Job job, string ClaimFormSentDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -960,7 +973,7 @@ namespace Disco.Web.Areas.API.Controllers
             }
             else
             {
-                if (ClaimFormSentDate.Equals("Now", StringComparison.InvariantCultureIgnoreCase))
+                if (ClaimFormSentDate.Equals("Now", StringComparison.OrdinalIgnoreCase))
                 {
                     job.JobMetaInsurance.ClaimFormSentDate = DateTime.Now;
                 }
@@ -978,7 +991,7 @@ namespace Disco.Web.Areas.API.Controllers
                     }
                 }
             }
-            job.JobMetaInsurance.ClaimFormSentUserId = CurrentUser.Id;
+            job.JobMetaInsurance.ClaimFormSentUserId = CurrentUser.UserId;
             Database.SaveChanges();
             return new Models.Job._DateChangeModel()
             {
@@ -991,7 +1004,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceDateOfPurchase(Job job, string DateOfPurchase)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1015,7 +1028,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceOtherInterestedParties(Job job, string OtherInterestedParties)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1034,7 +1047,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceRecoverReduceAction(Job job, string RecoverReduceAction)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1053,7 +1066,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsurancePoliceNotifiedCrimeReportNo(Job job, string PoliceNotifiedCrimeReportNo)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1072,7 +1085,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsurancePoliceNotifiedDate(Job job, string PoliceNotifiedDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1096,7 +1109,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsurancePoliceNotifiedStation(Job job, string PoliceNotifiedStation)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1115,7 +1128,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsurancePoliceNotified(Job job, string PoliceNotified)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1133,7 +1146,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsurancePropertyLastSeenDate(Job job, string PropertyLastSeenDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1160,7 +1173,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceBurglaryTheftMethodOfEntry(Job job, string BurglaryTheftMethodOfEntry)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1179,7 +1192,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceWitnessesNamesAddresses(Job job, string WitnessesNamesAddresses)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1198,7 +1211,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceThirdPartyCausedWhy(Job job, string ThirdPartyCausedWhy)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1217,7 +1230,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceThirdPartyCausedName(Job job, string ThirdPartyCausedName)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1236,7 +1249,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceThirdPartyCaused(Job job, string ThirdPartyCaused)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1254,7 +1267,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceDescription(Job job, string Description)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1273,7 +1286,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceEventLocation(Job job, string EventLocation)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1292,7 +1305,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateInsuranceLossOrDamageDate(Job job, string LossOrDamageDate)
         {
             // Validate Is NonWarranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HNWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware NonWarranty Jobs");
             }
@@ -1321,7 +1334,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateWarrantyExternalName(Job job, string ExternalName)
         {
             // Validate Is Warranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware Warranty Jobs");
             }
@@ -1340,7 +1353,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateWarrantyExternalLoggedDate(Job job, string ExternalLoggedDate)
         {
             // Validate Is Warranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware Warranty Jobs");
             }
@@ -1367,7 +1380,7 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateWarrantyExternalReference(Job job, string ExternalReference)
         {
             // Validate Is Warranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware Warranty Jobs");
             }
@@ -1382,11 +1395,11 @@ namespace Disco.Web.Areas.API.Controllers
             }
             Database.SaveChanges();
         }
-        
+
         private void UpdateWarrantyExternalCompletedDate(Job job, string ExternalCompletedDate)
         {
             // Validate Is Warranty Job
-            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HWar, StringComparison.InvariantCultureIgnoreCase))
+            if (!job.JobTypeId.Equals(JobType.JobTypeIds.HWar, StringComparison.OrdinalIgnoreCase))
             {
                 throw new Exception("This property can only be set for Hardware Warranty Jobs");
             }
@@ -1397,7 +1410,7 @@ namespace Disco.Web.Areas.API.Controllers
             }
             else
             {
-                if (ExternalCompletedDate.Equals("Now", StringComparison.InvariantCultureIgnoreCase))
+                if (ExternalCompletedDate.Equals("Now", StringComparison.OrdinalIgnoreCase))
                 {
                     job.JobMetaWarranty.ExternalCompletedDate = DateTime.Now;
                 }
@@ -1495,9 +1508,9 @@ namespace Disco.Web.Areas.API.Controllers
                         JobLog jobLog = new JobLog()
                         {
                             JobId = job.Id,
-                            TechUserId = CurrentUser.Id,
+                            TechUserId = CurrentUser.UserId,
                             Timestamp = DateTime.Now,
-                            Comments = string.Format("Added Flag: {0}{1}Reason: {2}", flagStatus.Item1, Environment.NewLine, Reason)
+                            Comments = string.Format("# Added Flag\r\n**{0}**\r\n{1}", flagStatus.Item1, string.IsNullOrWhiteSpace(Reason) ? "<no reason provided>" : Reason)
                         };
                         Database.JobLogs.Add(jobLog);
 
@@ -1586,31 +1599,6 @@ namespace Disco.Web.Areas.API.Controllers
             }
         }
 
-        [DiscoAuthorize(Claims.Job.Actions.LogRepair)]
-        public virtual ActionResult LogRepair(int id, string RepairerName, string RepairerReference, bool? redirect = null)
-        {
-            var j = Database.Jobs.Include("JobMetaNonWarranty").Where(job => job.Id == id).FirstOrDefault();
-            if (j != null)
-            {
-                if (j.CanLogRepair())
-                {
-                    j.OnLogRepair(RepairerName, RepairerReference);
-
-                    Database.SaveChanges();
-
-                    if (redirect.HasValue && redirect.Value)
-                        return RedirectToAction(MVC.Job.Show(id));
-                    else
-                        return Json("OK", JsonRequestBehavior.AllowGet);
-                }
-                else
-                {
-                    return Json("Job's state doesn't allow this action", JsonRequestBehavior.AllowGet);
-                }
-            }
-            return Json("Invalid Job Number", JsonRequestBehavior.AllowGet);
-        }
-
         [DiscoAuthorize(Claims.Job.Properties.DeviceReadyForReturn)]
         public virtual ActionResult DeviceReadyForReturn(int id, bool redirect)
         {
@@ -1690,9 +1678,9 @@ namespace Disco.Web.Areas.API.Controllers
             Database.Configuration.LazyLoadingEnabled = true;
             if (j != null)
             {
-                if (j.CanForceClose())
+                if (j.CanCloseForced())
                 {
-                    j.OnForceClose(Database, CurrentUser, Reason);
+                    j.OnCloseForced(Database, CurrentUser, Reason);
 
                     Database.SaveChanges();
                     if (redirect.HasValue && redirect.Value)
@@ -1715,9 +1703,9 @@ namespace Disco.Web.Areas.API.Controllers
             Database.Configuration.LazyLoadingEnabled = true;
             if (j != null)
             {
-                if (j.CanClose())
+                if (j.CanCloseNormally())
                 {
-                    j.OnClose(CurrentUser);
+                    j.OnCloseNormally(CurrentUser);
 
                     Database.SaveChanges();
                     if (redirect)
@@ -1844,7 +1832,7 @@ namespace Disco.Web.Areas.API.Controllers
                 var jl = new Disco.Models.Repository.JobLog()
                 {
                     JobId = j.Id,
-                    TechUserId = CurrentUser.Id,
+                    TechUserId = CurrentUser.UserId,
                     Timestamp = DateTime.Now,
                     Comments = comment
                 };
@@ -1856,14 +1844,14 @@ namespace Disco.Web.Areas.API.Controllers
             }
             return Json(new Models.Job.CommentPostModel() { Result = "Invalid Job Number" }, JsonRequestBehavior.AllowGet);
         }
-        
+
         [DiscoAuthorizeAny(Claims.Job.Actions.RemoveAnyLogs, Claims.Job.Actions.RemoveOwnLogs)]
         public virtual ActionResult CommentRemove(int id)
         {
             var jl = Database.JobLogs.Find(id);
             if (jl != null)
             {
-                if (jl.TechUserId.Equals(CurrentUser.Id, StringComparison.InvariantCultureIgnoreCase))
+                if (jl.TechUserId.Equals(CurrentUser.UserId, StringComparison.OrdinalIgnoreCase))
                     Authorization.RequireAny(Claims.Job.Actions.RemoveAnyLogs, Claims.Job.Actions.RemoveOwnLogs);
                 else
                     Authorization.Require(Claims.Job.Actions.RemoveAnyLogs);
@@ -1897,7 +1885,7 @@ namespace Disco.Web.Areas.API.Controllers
             }
             return HttpNotFound("Invalid Attachment Number");
         }
-        
+
         [DiscoAuthorize(Claims.Job.ShowAttachments), OutputCache(Location = System.Web.UI.OutputCacheLocation.Client, Duration = 172800)]
         public virtual ActionResult AttachmentThumbnail(int id)
         {
@@ -1908,7 +1896,7 @@ namespace Disco.Web.Areas.API.Controllers
                 var thumbFileInfo = new FileInfo(thumbPath);
                 if (thumbFileInfo.Exists && thumbFileInfo.Length > 0)
                 {
-                    if (thumbPath.EndsWith(".png", StringComparison.InvariantCultureIgnoreCase))
+                    if (thumbPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                         return File(thumbPath, "image/png");
                     else
                         return File(thumbPath, "image/jpg");
@@ -1931,13 +1919,13 @@ namespace Disco.Web.Areas.API.Controllers
                     if (file.ContentLength > 0)
                     {
                         var contentType = file.ContentType;
-                        if (string.IsNullOrEmpty(contentType) || contentType.Equals("unknown/unknown", StringComparison.InvariantCultureIgnoreCase))
+                        if (string.IsNullOrEmpty(contentType) || contentType.Equals("unknown/unknown", StringComparison.OrdinalIgnoreCase))
                             contentType = BI.Interop.MimeTypes.ResolveMimeType(file.FileName);
 
                         var ja = new Disco.Models.Repository.JobAttachment()
                         {
                             JobId = j.Id,
-                            TechUserId = CurrentUser.Id,
+                            TechUserId = CurrentUser.UserId,
                             Filename = file.FileName,
                             MimeType = contentType,
                             Timestamp = DateTime.Now,
@@ -1961,7 +1949,7 @@ namespace Disco.Web.Areas.API.Controllers
         [DiscoAuthorize(Claims.Job.ShowAttachments)]
         public virtual ActionResult Attachment(int id)
         {
-            var ja = Database.JobAttachments.Include("TechUser").Where(m => m.Id == id).FirstOrDefault();
+            var ja = Database.JobAttachments.Include("DocumentTemplate").Include("TechUser").Where(m => m.Id == id).FirstOrDefault();
             if (ja != null)
             {
 
@@ -1975,11 +1963,11 @@ namespace Disco.Web.Areas.API.Controllers
             }
             return Json(new Models.Attachment.AttachmentModel() { Result = "Invalid Attachment Number" }, JsonRequestBehavior.AllowGet);
         }
-        
+
         [DiscoAuthorize(Claims.Job.ShowAttachments)]
         public virtual ActionResult Attachments(int id)
         {
-            var j = Database.Jobs.Include("JobAttachments.TechUser").Where(m => m.Id == id).FirstOrDefault();
+            var j = Database.Jobs.Include("JobAttachments.DocumentTemplate").Include("JobAttachments.TechUser").Where(m => m.Id == id).FirstOrDefault();
             if (j != null)
             {
                 var m = new Models.Attachment.AttachmentsModel()
@@ -1999,11 +1987,11 @@ namespace Disco.Web.Areas.API.Controllers
             var ja = Database.JobAttachments.Include("TechUser").Where(m => m.Id == id).FirstOrDefault();
             if (ja != null)
             {
-                if (ja.TechUserId.Equals(CurrentUser.Id, StringComparison.InvariantCultureIgnoreCase))
+                if (ja.TechUserId.Equals(CurrentUser.UserId, StringComparison.OrdinalIgnoreCase))
                     Authorization.RequireAny(Claims.Job.Actions.RemoveAnyAttachments, Claims.Job.Actions.RemoveOwnAttachments);
                 else
                     Authorization.Require(Claims.Job.Actions.RemoveAnyAttachments);
-                
+
                 ja.OnDelete(Database);
                 Database.SaveChanges();
                 return Json("OK", JsonRequestBehavior.AllowGet);
@@ -2033,7 +2021,7 @@ namespace Disco.Web.Areas.API.Controllers
                     JobId = j.Id,
                     Description = Description,
                     Cost = cost,
-                    TechUserId = CurrentUser.Id
+                    TechUserId = CurrentUser.UserId
                 };
                 Database.JobComponents.Add(jc);
                 Database.SaveChanges();
@@ -2124,6 +2112,49 @@ namespace Disco.Web.Areas.API.Controllers
             {
                 throw new ArgumentException("Invalid Job Id", "id");
             }
+        }
+
+        [DiscoAuthorize(Claims.Job.Properties.DeviceHeldLocation)]
+        public virtual ActionResult DeviceHeldLocations()
+        {
+            List<string> locations;
+
+            switch (Database.DiscoConfiguration.JobPreferences.LocationMode)
+            {
+                case Disco.Models.BI.Job.LocationModes.Unrestricted:
+                    var jobDateThreshold = DateTime.Now.AddYears(-1);
+                    locations = Database.Jobs.Where(j => (j.OpenedDate > jobDateThreshold || !j.ClosedDate.HasValue) && j.DeviceHeldLocation != null).Select(j => j.DeviceHeldLocation).Distinct().OrderBy(l => l).ToList().Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(l => l).ToList();
+                    break;
+                case Disco.Models.BI.Job.LocationModes.OptionalList:
+                case Disco.Models.BI.Job.LocationModes.RestrictedList:
+                    locations = Database.DiscoConfiguration.JobPreferences.LocationList;
+                    break;
+                default:
+                    throw new InvalidOperationException("Unknown Location Mode Configured");
+            }
+
+            var locationReferences = ManagedJobList.OpenJobsTable(j => j).Items.Cast<JobTableStatusItemModel>().JobLocationReferences(locations);
+
+            var results = locationReferences.Select(locRef =>
+            {
+                string reference = null;
+
+                if (locRef.References != null && locRef.References.Count > 0)
+                {
+                    if (locRef.References.Count == 1)
+                        reference = string.Format("Job {0}", locRef.References[0].JobId);
+                    else
+                        reference = string.Format("{0} jobs", locRef.References.Count);
+                }
+
+                return new Models.Job.DeviceHeldLocationModel()
+                {
+                    Location = locRef.Location,
+                    References = reference
+                };
+            }).ToList();
+
+            return Json(results, JsonRequestBehavior.AllowGet);
         }
     }
 }

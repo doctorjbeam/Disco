@@ -1,16 +1,15 @@
-﻿using System;
+﻿using Disco.Data.Repository;
+using Disco.Models.Services.Interop.DiscoServices;
+using Disco.Services.Interop.DiscoServices;
+using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using Disco.Data.Repository;
-using System.IO.Compression;
-using Disco.Models.BI.Interop.Community;
-using System.Web;
-using Newtonsoft.Json;
 using System.Threading;
+using System.Web;
 
 namespace Disco.Services.Plugins
 {
@@ -250,81 +249,6 @@ namespace Disco.Services.Plugins
                 throw new InvalidOperationException(string.Format("Unknown Plugin Feature Category Type: [{0}]", FeatureCategoryType.Name));
         }
 
-        public static string CatalogueFile(DiscoDataContext Database)
-        {
-            return Path.Combine(Database.DiscoConfiguration.PluginPackagesLocation, "Catalogue.json");
-        }
-        public static string CompatibilityFile(DiscoDataContext Database)
-        {
-            return Path.Combine(Database.DiscoConfiguration.PluginPackagesLocation, "Compatibility.json");
-        }
-
-        public static PluginLibraryUpdateResponse LoadCatalogue(DiscoDataContext Database)
-        {
-            var catalogueFile = CatalogueFile(Database);
-
-            if (!File.Exists(catalogueFile))
-                return null;
-
-            return JsonConvert.DeserializeObject<PluginLibraryUpdateResponse>(File.ReadAllText(catalogueFile));
-        }
-
-        public static PluginLibraryCompatibilityResponse LoadCompatibilityData(DiscoDataContext Database)
-        {
-            var pluginAssembly = typeof(Plugins).Assembly;
-            Version hostVersion = pluginAssembly.GetName().Version;
-            PluginLibraryCompatibilityResponse Data = null;
-            var localCompatFile = Path.Combine(Path.GetDirectoryName(pluginAssembly.Location), "ReleasePluginCompatibility.json");
-            var serverCompatFile = CompatibilityFile(Database);
-
-            if (File.Exists(localCompatFile))
-            {
-                Data = JsonConvert.DeserializeObject<PluginLibraryCompatibilityResponse>(File.ReadAllText(localCompatFile));
-                Data.HostVersion = hostVersion.ToString(4);
-            }
-            if (File.Exists(serverCompatFile))
-            {
-                var serverData = JsonConvert.DeserializeObject<PluginLibraryCompatibilityResponse>(File.ReadAllText(serverCompatFile));
-                if (Version.Parse(serverData.HostVersion) == hostVersion)
-                {
-                    if (Data == null)
-                    {
-                        // No Local Compatibility File
-                        Data = serverData;
-                    }
-                    else
-                    {
-                        // Join Compatibility Files
-                        var localItems = Data.Plugins;
-                        var localItemVersions = localItems.ToDictionary(i => i, i => Version.Parse(i.Version));
-                        var joinedItems = localItems.ToList();
-                        Data.ResponseTimestamp = serverData.ResponseTimestamp;
-                        foreach (var serverItem in serverData.Plugins)
-                        {
-                            var serverItemVersion = Version.Parse(serverItem.Version);
-                            var localItem = localItems.FirstOrDefault(i => i.Id.Equals(serverItem.Id, StringComparison.InvariantCultureIgnoreCase) && serverItemVersion == localItemVersions[i]);
-                            if (localItem != null)
-                                joinedItems.Remove(localItem);
-
-                            joinedItems.Add(serverItem);
-                        }
-                        Data.Plugins = joinedItems;
-                    }
-                }
-            }
-            if (Data == null)
-            {
-                Data = new PluginLibraryCompatibilityResponse()
-                {
-                    HostVersion = hostVersion.ToString(4),
-                    Plugins = new List<PluginLibraryCompatibilityItem>(),
-                    ResponseTimestamp = new DateTime(2011, 7, 1)
-                };
-            }
-
-            return Data;
-        }
-
         public static void InitalizePlugins(DiscoDataContext Database)
         {
             if (_PluginManifests == null)
@@ -334,7 +258,7 @@ namespace Disco.Services.Plugins
                     if (_PluginManifests == null)
                     {
                         Version hostVersion = typeof(Plugins).Assembly.GetName().Version;
-                        var compatibilityData = new Lazy<PluginLibraryCompatibilityResponse>(() => LoadCompatibilityData(Database));
+                        var compatibilityData = new Lazy<PluginLibraryIncompatibility>(() => PluginLibrary.LoadManifest(Database).LoadIncompatibilityData());
                         Dictionary<string, PluginManifest> loadedPlugins = new Dictionary<string, PluginManifest>();
 
                         PluginPath = Database.DiscoConfiguration.PluginsLocation;
@@ -373,9 +297,9 @@ namespace Disco.Services.Plugins
                                             if (pluginManifest != null)
                                             {
                                                 // Check Version Compatibility
-                                                var pluginCompatibility = compatibilityData.Value.Plugins.FirstOrDefault(i => i.Id.Equals(pluginManifest.Id, StringComparison.InvariantCultureIgnoreCase) && pluginManifest.Version == Version.Parse(i.Version));
-                                                if (pluginCompatibility != null && !pluginCompatibility.Compatible)
-                                                    throw new InvalidOperationException(string.Format("The plugin [{0} v{1}] is not compatible: {2}", pluginManifest.Id, pluginManifest.VersionFormatted, pluginCompatibility.Reason));
+                                                var pluginIncompatible = compatibilityData.Value.IncompatiblePlugins.FirstOrDefault(i => i.PluginId.Equals(pluginManifest.Id, StringComparison.OrdinalIgnoreCase) && pluginManifest.Version == i.Version);
+                                                if (pluginIncompatible != null)
+                                                    throw new InvalidOperationException(string.Format("The plugin [{0} v{1}] is not compatible: {2}", pluginManifest.Id, pluginManifest.VersionFormatted, pluginIncompatible.Reason));
 
                                                 if (pluginManifest.HostVersionMin != null && pluginManifest.HostVersionMin > hostVersion)
                                                     throw new InvalidOperationException(string.Format("The plugin [{0} v{1}] does not support this version of Disco (Requires v{2} or greater)", pluginManifest.Id, pluginManifest.VersionFormatted, pluginManifest.HostVersionMin.ToString()));
@@ -443,13 +367,13 @@ namespace Disco.Services.Plugins
             _PluginAssemblyManifests = _PluginManifests.Values.ToDictionary(p => p.PluginAssembly, p => p);
         }
 
-        public static PluginManifest UpdatePlugin(DiscoDataContext Database, PluginManifest ExistingManifest, String UpdatePluginPackageFilePath, PluginLibraryCompatibilityResponse CompatibilityData = null)
+        public static PluginManifest UpdatePlugin(DiscoDataContext Database, PluginManifest ExistingManifest, String UpdatePluginPackageFilePath, PluginLibraryIncompatibility PluginLibraryIncompatibility = null)
         {
             PluginManifest updatedManifest;
 
             using (var packageStream = File.OpenRead(UpdatePluginPackageFilePath))
             {
-                updatedManifest = UpdatePlugin(Database, ExistingManifest, packageStream, CompatibilityData);
+                updatedManifest = UpdatePlugin(Database, ExistingManifest, packageStream, PluginLibraryIncompatibility);
             }
 
             // Remove Update after processing
@@ -458,7 +382,7 @@ namespace Disco.Services.Plugins
             return updatedManifest;
         }
 
-        public static PluginManifest UpdatePlugin(DiscoDataContext Database, PluginManifest ExistingManifest, Stream UpdatePluginPackage, PluginLibraryCompatibilityResponse CompatibilityData = null)
+        public static PluginManifest UpdatePlugin(DiscoDataContext Database, PluginManifest ExistingManifest, Stream UpdatePluginPackage, PluginLibraryIncompatibility PluginLibraryIncompatibility = null)
         {
             using (MemoryStream packageStream = new MemoryStream())
             {
@@ -482,23 +406,17 @@ namespace Disco.Services.Plugins
                         packageManifest = PluginManifest.FromPluginManifestFile(packageManifestStream);
                     }
 
-                    if (ExistingManifest.Version == packageManifest.Version)
-                    {
-                        // Skip Update if already installed
-                        PluginsLog.LogInitializeWarning(string.Format("This plugin [{0}] version [{1}] is already installed, skipping Update", ExistingManifest.Id, ExistingManifest.Version));
-                        return ExistingManifest;
-                    }
                     if (ExistingManifest.Version > packageManifest.Version)
                     {
                         throw new InvalidDataException("A newer version of this plugin is already installed");
                     }
 
                     // Check Compatibility
-                    if (CompatibilityData == null)
-                        CompatibilityData = LoadCompatibilityData(Database);
-                    var pluginCompatibility = CompatibilityData.Plugins.FirstOrDefault(i => i.Id.Equals(packageManifest.Id, StringComparison.InvariantCultureIgnoreCase) && packageManifest.Version == Version.Parse(i.Version));
-                    if (pluginCompatibility != null && !pluginCompatibility.Compatible)
-                        throw new InvalidOperationException(string.Format("The plugin [{0} v{1}] is not compatible: {2}", packageManifest.Id, packageManifest.VersionFormatted, pluginCompatibility.Reason));
+                    if (PluginLibraryIncompatibility == null)
+                        PluginLibraryIncompatibility = PluginLibrary.LoadManifest(Database).LoadIncompatibilityData();
+                    var pluginIncompatibility = PluginLibraryIncompatibility.IncompatiblePlugins.FirstOrDefault(i => i.PluginId.Equals(packageManifest.Id, StringComparison.OrdinalIgnoreCase) && packageManifest.Version == i.Version);
+                    if (pluginIncompatibility != null)
+                        throw new InvalidOperationException(string.Format("The plugin [{0} v{1}] is not compatible: {2}", packageManifest.Id, packageManifest.VersionFormatted, pluginIncompatibility.Reason));
 
                     string packagePath = Path.Combine(Database.DiscoConfiguration.PluginsLocation, packageManifest.Id);
 
@@ -595,7 +513,7 @@ namespace Disco.Services.Plugins
 
         public static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
         {
-            if (args.RequestingAssembly != null && args.RequestingAssembly.Location.StartsWith(PluginPath, StringComparison.InvariantCultureIgnoreCase) && _PluginManifests != null)
+            if (args.RequestingAssembly != null && args.RequestingAssembly.Location.StartsWith(PluginPath, StringComparison.OrdinalIgnoreCase) && _PluginManifests != null)
             {
                 // Try best guess first
                 PluginManifest requestingPlugin = _PluginManifests.Values.Where(p => p.Type.Assembly == args.RequestingAssembly).FirstOrDefault();

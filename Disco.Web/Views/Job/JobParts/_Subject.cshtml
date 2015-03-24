@@ -1,4 +1,5 @@
 ﻿@model Disco.Web.Models.Job.ShowModel
+@using Disco.Services.Users.UserFlags;
 @{
     Authorization.Require(Claims.Job.Show);
 }
@@ -21,7 +22,7 @@
                                 </td>
                                 <td>@if (Authorization.Has(Claims.Job.Properties.ExpectedClosedDate))
                                     {
-                                    @Html.TextBoxFor(m => m.Job.ExpectedClosedDate, new { @class = "small discreet" }) @AjaxHelpers.AjaxSave() @AjaxHelpers.AjaxLoader()
+                                    @Html.TextBoxFor(m => m.Job.ExpectedClosedDate, "{0:yyyy/MM/dd hh:mm tt}", new { @class = "small discreet" }) @AjaxHelpers.AjaxSave() @AjaxHelpers.AjaxLoader()
                                     <script type="text/javascript">
                                         $(function () {
                                             var $ajaxSave = $('#Job_ExpectedClosedDate').next('.ajaxSave');
@@ -165,10 +166,30 @@
                             $(function () {
                                 var generatePdfUrl = '@Url.Action(MVC.API.Job.GeneratePdf(Model.Job.Id.ToString(), null))?DocumentTemplateId=';
                                 var $documentTemplates = $('#Job_Show_GenerateDocument');
+                                var $generationHost;
+
                                 $documentTemplates.change(function () {
                                     var v = $documentTemplates.val();
                                     if (v) {
-                                        window.location.href = generatePdfUrl + v;
+                                        var url = generatePdfUrl + v;
+
+                                        if ($.connection && $.connection.hub && $.connection.hub.transport &&
+                                                $.connection.hub.transport.name == 'foreverFrame') {
+                                            // SignalR active with foreverFrame transport - use popup window
+                                            window.open(url, '_blank', 'height=150,width=250,location=no,menubar=no,resizable=no,scrollbars=no,status=no,toolbar=no');
+                                        } else {
+                                            // use iFrame
+                                            if (!$generationHost) {
+                                                $generationHost = $('<iframe>')
+                                                    .attr({ 'src': url, 'title': 'Document Generation Host' })
+                                                    .addClass('hidden')
+                                                    .appendTo('body')
+                                                    .contents();
+                                            } else {
+                                                $generationHost[0].location.href = url;
+                                            }
+                                        }
+
                                         $documentTemplates.val('').blur();
                                     }
                                 });
@@ -202,7 +223,7 @@
                             {
                             <div id="Job_Show_Device_Details_HWar">
                                 <div>DEVICE WARRANTY</div>
-                                <div>Until: <span id="Job_Show_Device_Details_HWar_ValidUntil">@Model.Job.Device.DeviceBatch.WarrantyValidUntil.ToFuzzy("Unknown")</span></div>
+                                <div>Until: <span id="Job_Show_Device_Details_HWar_ValidUntil" data-livestamp="@Model.Job.Device.DeviceBatch.WarrantyValidUntil.ToUnixEpoc()">@Model.Job.Device.DeviceBatch.WarrantyValidUntil.ToFullDateTime("Unknown")</span></div>
                                 @if (!string.IsNullOrWhiteSpace(Model.Job.Device.DeviceBatch.WarrantyDetails))
                                 {
                                     <a id="Job_Show_Device_Details_HWar_Details_Button" href="#">Show Details</a>
@@ -232,7 +253,7 @@
                             <div id="Job_Show_Device_Details_HNWar">
                                 <div>INSURANCE</div>
                                 <div id="Job_Show_Device_Details_HNWar_InsuranceSupplier">@Model.Job.Device.DeviceBatch.InsuranceSupplier</div>
-                                <div>Until: <span id="Job_Show_Device_Details_HNWar_ValidUntil">@Model.Job.Device.DeviceBatch.InsuredUntil.ToFuzzy("Unknown")</span></div>
+                                <div>Until: <span id="Job_Show_Device_Details_HNWar_ValidUntil" data-livestamp="@Model.Job.Device.DeviceBatch.InsuredUntil.ToUnixEpoc()">@Model.Job.Device.DeviceBatch.InsuredUntil.ToFullDateTime("Unknown")</span></div>
                                 @if (!string.IsNullOrWhiteSpace(Model.Job.Device.DeviceBatch.InsuranceDetails))
                                 {
                                     <a id="Job_Show_Device_Details_HNWar_Details_Button" href="#">Show Details</a>
@@ -261,15 +282,32 @@
                     </div>
                     @if (Model.Job.DeviceHeld.HasValue)
                     {
+                        var canEditLocation = Authorization.Has(Claims.Job.Properties.DeviceHeldLocation);
                         <div id="Job_Show_Device_DeviceHeld" class="status">
                             <table class="none">
                                 <tr>
                                     <td>Location:</td>
                                     <td>
                                         <span id="Job_Show_Device_DeviceHeld_Location">
-                                            @if (Authorization.Has(Claims.Job.Properties.DeviceHeldLocation))
+                                            @if (canEditLocation)
                                             {
-                                                @Html.TextBoxFor(m => m.Job.DeviceHeldLocation, new { @class = "small discreet" }) @AjaxHelpers.AjaxSave() @AjaxHelpers.AjaxLoader()
+                                                switch (Model.LocationMode)
+                                                {
+                                                    case Disco.Models.BI.Job.LocationModes.Unrestricted:
+                                                    case Disco.Models.BI.Job.LocationModes.OptionalList:
+                                                @Html.TextBoxFor(m => m.Job.DeviceHeldLocation, new { @class = "small discreet" })
+                                                        break;
+                                                    case Disco.Models.BI.Job.LocationModes.RestrictedList:
+                                                        List<SelectListItem> listOptions = new List<SelectListItem>() { new SelectListItem() { Value = "", Text = "<Unknown>" } };
+                                                        if (!string.IsNullOrWhiteSpace(Model.Job.DeviceHeldLocation) && !Model.LocationOptions.Any(l => l.Location.Equals(Model.Job.DeviceHeldLocation)))
+                                                        {
+                                                            listOptions.Add(new SelectListItem() { Value = Model.Job.DeviceHeldLocation, Text = string.Format("Custom: {0}", Model.Job.DeviceHeldLocation) });
+                                                        }
+                                                        listOptions.AddRange(Model.LocationOptions.Select(l => new SelectListItem() { Value = l.Location, Text = (l.References.Count == 0 ? l.Location : (l.References.Count == 1 ? string.Format("{0} [Job {1}]", l.Location, l.References[0].JobId) : string.Format("{0} [{1} jobs]", l.Location, l.References.Count))) }));
+                                                @Html.DropDownListFor(m => m.Job.DeviceHeldLocation, listOptions, new { @class = "small discreet" });
+                                                                                                                                                    break;
+                                                }
+                                                @AjaxHelpers.AjaxSave() @AjaxHelpers.AjaxLoader()
                                             }
                                             else if (string.IsNullOrEmpty(Model.Job.DeviceHeldLocation))
                                             {
@@ -301,16 +339,65 @@
                                     </tr>
                                 }
                             </table>
-                            @if (Authorization.Has(Claims.Job.Properties.DeviceHeldLocation))
+                            @if (canEditLocation)
                             {
                                 <script type="text/javascript">
                                     $(function () {
+                                        @switch (Model.LocationMode)
+                                        {
+                                            case Disco.Models.BI.Job.LocationModes.Unrestricted:
+                                            case Disco.Models.BI.Job.LocationModes.OptionalList:
+                                                <text>
                                         var $deviceHeldLocation = $('#Job_DeviceHeldLocation');
                                         var $ajaxSave = $deviceHeldLocation.next('.ajaxSave');
+                                        var autocompleteLoaded = false;
 
                                         $deviceHeldLocation
                                             .watermark('Unknown')
-                                            .focus(function () { $deviceHeldLocation.select() })
+                                            .focus(function () {
+                                                $deviceHeldLocation.select();
+
+                                                // Load AutoComplete
+                                                if (!autocompleteLoaded){
+                                                    $.ajax({
+                                                        url: '@(Url.Action(MVC.API.Job.DeviceHeldLocations()))',
+                                                        dataType: 'json',
+                                                        success: function (d) {
+
+                                                            $.each(d, function(){
+                                                                this.value = this.Location;
+                                                                this.label = this.Location;
+                                                            });
+
+                                                            $deviceHeldLocation.autocomplete({
+                                                                source: d,
+                                                                minLength: 0,
+                                                                focus: function(e, ui){
+                                                                    return false;
+                                                                },
+                                                                select: function (e, ui) {
+                                                                    $deviceHeldLocation.val(ui.item.Location).blur().change();
+                                                                    return false;
+                                                                }
+                                                            }).data('ui-autocomplete')._renderItem = function (ul, item) {
+                                                                var anchor = $('<a>').append($('<strong>').text(item.Location));
+                                                                if (item.References){
+                                                                    anchor.append(document.createTextNode(' ['+item.References+']'));
+                                                                }
+                                                                var item = $("<li></li>")
+                                                                    .data("item.autocomplete", item)
+                                                                    .append(anchor);
+                                                                return item.appendTo(ul);
+                                                            };
+                                                                
+                                                            $deviceHeldLocation.autocomplete('search', '');
+                                                        }
+                                                    });
+                                                    autocompleteLoaded = true;
+                                                }else{
+                                                    $deviceHeldLocation.autocomplete('search', '');
+                                                }
+                                            })
                                             .keydown(function (e) {
                                                 $ajaxSave.show();
                                                 if (e.which == 13) {
@@ -341,6 +428,20 @@
                                                     }
                                                 });
                                             });
+                                        </text>
+                                                break;
+                                            case Disco.Models.BI.Job.LocationModes.RestrictedList:
+                                                        <text>
+                                        document.DiscoFunctions.PropertyChangeHelper(
+                                            $('#Job_DeviceHeldLocation'),
+                                            null,
+                                            '@Url.Action(MVC.API.Job.UpdateDeviceHeldLocation(Model.Job.Id, null))',
+                                            'DeviceHeldLocation');
+                                        </text>
+                                                break;
+                                        }
+
+                                        
                                     });
                                 </script>
                             }
@@ -358,16 +459,59 @@
                                                                             else
                                                                             {@Model.Job.User.DisplayName}
                     </h2>
-                    <div id="Job_Show_User_Id" title="Id">@Model.Job.UserId</div>
-                    @if (!string.IsNullOrWhiteSpace(Model.Job.User.PhoneNumber))
-                    {<div id="Job_Show_User_PhoneNumber" title="Phone Number">Phone: @Model.Job.User.PhoneNumber</div>}
-                    @if (!string.IsNullOrWhiteSpace(Model.Job.User.EmailAddress))
-                    {<div id="Job_Show_User_EmailAddress" title="Email Address">Email: <a href="mailto:@(Model.Job.User.EmailAddress)">@Model.Job.User.EmailAddress</a></div>}
+                    <div id="Job_Show_User_Id" title="Id">@Model.Job.User.FriendlyId()</div>
+                    @if (Authorization.Has(Claims.User.ShowDetails))
+                    {
+                        if (!string.IsNullOrWhiteSpace(Model.Job.User.PhoneNumber))
+                        {<div id="Job_Show_User_PhoneNumber" title="Phone Number">Phone: @Model.Job.User.PhoneNumber</div>}
+                        if (!string.IsNullOrWhiteSpace(Model.Job.User.EmailAddress))
+                        {<div id="Job_Show_User_EmailAddress" title="Email Address">Email: <a href="mailto:@(Model.Job.User.EmailAddress)">@Model.Job.User.EmailAddress</a></div>}
+                    }
+                    @if (Authorization.Has(Claims.User.ShowFlagAssignments))
+                    {
+                        <div id="Job_Show_User_Flags">
+                            @foreach (var flag in Model.Job.User.UserFlagAssignments.Where(f => !f.RemovedDate.HasValue).Select(f => Tuple.Create(f, UserFlagService.GetUserFlag(f.UserFlagId))))
+                            {
+                                <i class="flag fa fa-@(flag.Item2.Icon) fa-fw d-@(flag.Item2.IconColour)"><span class="details"><span class="name">@flag.Item2.Name</span>@if (flag.Item1.Comments != null)
+                                                                                                                                                                          {<span class="comments">@flag.Item1.Comments.ToHtmlComment()</span>}<span class="added">@CommonHelpers.FriendlyDateAndUser(flag.Item1.AddedDate, flag.Item1.AddedUserId)</span></span></i>
+                            }
+                            <script type="text/javascript">
+                                $(function () {
+                                    $('#Job_Show_User_Flags')
+                                        .tooltip({
+                                            items: 'i.flag',
+                                            content: function () {
+                                                var $this = $(this);
+                                                return $this.children('.details').html();
+                                            },
+                                            tooltipClass: 'User_FlagAssignment_Tooltip',
+                                            position: {
+                                                my: "right top",
+                                                at: "right bottom",
+                                                collision: "flipfit flip"
+                                            },
+                                            hade: {
+                                                effect: ''
+                                            },
+                                            close: function (e, ui) {
+                                                ui.tooltip.hover(
+                                                    function () {
+                                                        $(this).stop(true).fadeTo(100, 1);
+                                                    },
+                                                    function () {
+                                                        $(this).fadeOut(100, function () { $(this).remove(); });
+                                                    });
+                                            }
+                                        });
+                                });
+                            </script>
+                        </div>
+                    }
                     @if (Model.Job.WaitingForUserAction.HasValue)
                     {
                         <div id="Job_Show_User_WaitingForUserAction" class="status">
                             <h4>Awaiting Action</h4>
-                            Since: @Model.Job.WaitingForUserAction.ToFuzzy()
+                            Since: <span data-livestamp="@Model.Job.WaitingForUserAction.ToUnixEpoc()">@Model.Job.WaitingForUserAction.ToFullDateTime()</span>
                         </div>
                     }
                 </div>
@@ -376,16 +520,25 @@
     </tr>
     <tr id="Job_Show_Subjects_Actions">
         <td id="Job_Show_Job_Actions">
-            @if (Model.Job.CanForceClose())
-            { 
-                @Html.ActionLinkSmallButton("Forcibly Close Job", MVC.API.Job.Close(Model.Job.Id, true), "Job_Show_Job_Actions_ForceClose_Button")
+            @{
+                List<string> CanCloseForcedReasons;
+                if (Model.Job.CanCloseForced(out CanCloseForcedReasons))
+                { 
+                @Html.ActionLinkSmallButton("Forcibly Close", MVC.API.Job.Close(Model.Job.Id, true), "Job_Show_Job_Actions_ForceClose_Button")
                 <div id="Job_Show_Job_Actions_ForceClose_Dialog" class="dialog" title="Forcibly Close this Job?">
+                    <div class="info-box error">
+                        <p class="fa-p">
+                            <i class="fa fa-exclamation-circle"></i><strong>Are you sure?</strong>
+                        </p>
+                        <ul>
+                            @foreach (var reason in CanCloseForcedReasons)
+                            {
+                                <li>@reason</li>
+                            }
+                        </ul>
+                    </div>
                     @using (Html.BeginForm(MVC.API.Job.ForceClose(Model.Job.Id, null, true)))
                     {
-                        <p>
-                            <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
-                            Are you sure?
-                        </p>
                         <h3>Reason:</h3>
                         <p>
                             <textarea name="Reason" class="block"></textarea>
@@ -423,15 +576,15 @@
                         });
                     });
                 </script>
+                }   
             }
 
-            @if (Model.Job.CanClose())
+            @if (Model.Job.CanCloseNormally())
             { 
-                @Html.ActionLinkSmallButton("Close Job", MVC.API.Job.Close(Model.Job.Id, true), "Job_Show_Job_Actions_Close_Button")
+                @Html.ActionLinkSmallButton("Close", MVC.API.Job.Close(Model.Job.Id, true), "Job_Show_Job_Actions_Close_Button")
                 <div id="Job_Show_Job_Actions_Close_Dialog" class="dialog" title="Close this Job?">
                     <p>
-                        <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
-                        Are you sure?
+                        <i class="fa fa-exclamation-triangle fa-lg"></i>&nbsp;Are you sure?
                     </p>
                 </div>
                 <script type="text/javascript">
@@ -471,8 +624,7 @@
                 @Html.ActionLinkSmallButton("Reopen Job", MVC.API.Job.Reopen(Model.Job.Id, true), "Job_Show_Job_Actions_Reopen_Button")
                 <div id="Job_Show_Job_Actions_Reopen_Dialog" class="dialog" title="Reopen this Job?">
                     <p>
-                        <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
-                        Are you sure?
+                        <i class="fa fa-exclamation-triangle fa-lg"></i>&nbsp;Are you sure?
                     </p>
                 </div>
                 <script type="text/javascript">
@@ -510,11 +662,10 @@
             }
             @if (Model.Job.CanDelete())
             { 
-                @Html.ActionLinkSmallButton("Delete Job", MVC.API.Job.Delete(Model.Job.Id, true), "Job_Show_Job_Actions_Delete_Button")
+                @Html.ActionLinkSmallButton("Delete", MVC.API.Job.Delete(Model.Job.Id, true), "Job_Show_Job_Actions_Delete_Button")
                 <div id="Job_Show_Job_Actions_Delete_Dialog" class="dialog" title="Delete this Job?">
                     <p>
-                        <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
-                        This item will be permanently deleted and cannot be recovered. Are you sure?
+                        <i class="fa fa-exclamation-triangle fa-lg"></i>&nbsp;This item will be permanently deleted and cannot be recovered. Are you sure?
                     </p>
                 </div>
                 <script type="text/javascript">
@@ -550,6 +701,122 @@
                     });
                 </script>
             }
+            @if (Model.Job.CanAddQueues() && Model.AvailableQueues != null && Model.AvailableQueues.Count > 0)
+            {
+
+                var priorityValue = JobQueuePriority.Normal.ToString();
+                var priorityItems = Enum.GetNames(typeof(JobQueuePriority)).Select(i => new SelectListItem() { Text = i, Value = i, Selected = (i == priorityValue) }).ToList();
+
+                var slaOptions = Disco.Services.Jobs.JobQueues.JobQueueService.SlaOptions.Select(o => new SelectListItem() { Text = o.Value, Value = o.Key.ToString() }).ToList();
+                
+                @Html.ActionLinkSmallButton("Add to Queue", MVC.API.JobQueueJob.AddJob(), "Job_Show_Job_Actions_AddQueue_Button")
+                <div id="Job_Show_Job_Actions_AddQueue_Dialog" class="dialog" title="Add Job to Queue">
+                    @using (Html.BeginForm(MVC.API.JobQueueJob.AddJob()))
+                    {
+                        <input id="Job_Show_Job_Actions_AddQueue_Dialog_Id" type="hidden" name="id" />
+                        <input id="Job_Show_Job_Actions_AddQueue_Dialog_JobId" type="hidden" name="JobId" value="@Model.Job.Id" />
+                        <div class="queuePicker">
+                            @foreach (var jobQueue in Model.AvailableQueues.OrderBy(jq => jq.Name))
+                            {
+                                <div class="queue" data-queueid="@(jobQueue.Id)" data-queuesla="@(jobQueue.DefaultSLAExpiry.HasValue ? jobQueue.DefaultSLAExpiry.Value.ToString() : null)" data-queuepriority="@(jobQueue.Priority.ToString())">
+                                    <i class="fa fa-@(jobQueue.Icon) fa-fw fa-lg d-@(jobQueue.IconColour)"></i>@jobQueue.Name
+                                </div>
+                            }
+                        </div>
+                        <div class="details">
+                            <div>
+                                <h4>Job Priority</h4>
+                                @Html.DropDownList("Priority", priorityItems, new { id = "Job_Show_Job_Actions_AddQueue_Priority" }) <i class="fa d-priority-@(priorityValue.ToLower())" title="@(priorityValue) Priority"></i>
+                            </div>
+                            <div>
+                                <h4>SLA Target</h4>
+                                @Html.DropDownList("SLAExpiresMinutes", slaOptions, new { id = "Job_Show_Job_Actions_AddQueue_SLAExpiresMinutes" })
+                            </div>
+                            <div>
+                                <h4>Tasks/Comment</h4>
+                                <textarea name="Comment" id="Job_Show_Job_Actions_AddQueue_Comment"></textarea>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <script type="text/javascript">
+                    $(function () {
+                        var button = $('#Job_Show_Job_Actions_AddQueue_Button');
+                        var buttonDialog = null;
+                        var buttonLink = button.attr('href');
+                        
+                        var queuePicker = null;
+                        var queueId = null;
+                        var details = null;
+
+                        function queueSelected(){
+                            var queue = $(this);
+
+                            queuePicker.children().removeClass('selected');
+                            queue.addClass('selected');
+
+                            queueId.val(queue.attr('data-queueid'));
+
+                            var queueSLA = queue.attr('data-queuesla');
+                            if (!queueSLA)
+                                queueSLA = 0;
+
+                            $('#Job_Show_Job_Actions_AddQueue_Priority').val('Normal');
+                            $('#Job_Show_Job_Actions_AddQueue_SLAExpiresMinutes').val(queueSLA);
+
+                            details.show();
+
+                            $('#Job_Show_Job_Actions_AddQueue_Comment').focus().select();
+                        }
+                        
+                        button.attr('href', '#').click(function (e) {
+                            e.preventDefault();
+
+                            if (!buttonDialog){
+                                buttonDialog = $('#Job_Show_Job_Actions_AddQueue_Dialog');
+                                buttonDialog.dialog({
+                                    width: 600,
+                                    height: 410,
+                                    resizable: false,
+                                    modal: true,
+                                    autoOpen: false,
+                                    buttons: {
+                                        Cancel: function () {
+                                            $(this).dialog("close");
+                                        },
+                                        "Add to Queue": function () {
+                                            if (!!queueId.val()){
+                                                var $this = $(this);
+                                                $this.dialog("disable");
+                                                $this.dialog("option", "buttons", null);
+                                                buttonDialog.find('form').submit();
+                                            }else{
+                                                alert('Select a Job Queue');
+                                            }
+                                        }
+                                    }
+                                });
+
+                                queuePicker = buttonDialog.find('.queuePicker');
+                                queueId = $('#Job_Show_Job_Actions_AddQueue_Dialog_Id');
+                                details = buttonDialog.find('.details');
+
+                                var priorityList = $('#Job_Show_Job_Actions_AddQueue_Priority');
+                                priorityList.change(function () {
+                                    var icon = priorityList.closest('div').find('i').first();
+                                    icon[0].className = '';
+                                    icon.addClass('fa d-priority-' + priorityList.val().toLowerCase()).attr('title', priorityList.val() + ' Priority');
+                                });
+
+                                queuePicker.on('click', 'div.queue', queueSelected);
+                            }
+
+                            buttonDialog.dialog('open');
+                            return false;
+                        });
+                    });
+                </script>
+            }
             @if (Model.Job.CanLogWarranty())
             { 
                 @Html.ActionLinkSmallButton("Log Warranty", MVC.Job.LogWarranty(Model.Job.Id, null, null), "Job_Show_Job_Actions_LogWarranty_Button")
@@ -564,56 +831,7 @@
             }
             @if (Model.Job.CanLogRepair())
             { 
-                @Html.ActionLinkSmallButton("Repairs Logged", MVC.API.Job.LogRepair(Model.Job.Id, null, null, true), "Job_Show_Job_Actions_LogRepair_Button")
-                <div id="Job_Show_Job_Actions_LogRepair_Dialog" class="dialog" title="Repairs Logged">
-                    @using (Html.BeginForm(MVC.API.Job.LogRepair(Model.Job.Id, null, null, true)))
-                    {
-                        <h3>Repairer Name:</h3>
-                        <p>
-                            <input type="text" id="Job_Show_Job_Actions_LogRepair_Dialog_RepairerName" name="RepairerName" />
-                        </p>
-                        <h3>Repairer Reference:</h3>
-                        <p>
-                            <input type="text" id="Job_Show_Job_Actions_LogRepair_Dialog_RepairerReference" name="RepairerReference" />
-                        </p>
-                    }
-                </div>
-                <script type="text/javascript">
-                    $(function () {
-                        var button = $('#Job_Show_Job_Actions_LogRepair_Button');
-                        var buttonDialog = null;
-                        button.attr('href', '#');
-                        button.click(function () {
-                            if (!buttonDialog){
-                                buttonDialog = $('#Job_Show_Job_Actions_LogRepair_Dialog');
-                                buttonDialog.dialog({
-                                    resizable: false,
-                                    height: 240,
-                                    modal: true,
-                                    autoOpen: false,
-                                    buttons: {
-                                        "Log Repairs": function () {
-                                            var $this = $(this);
-                                            $this.dialog("disable");
-                                            $this.dialog("option", "buttons", null);
-                                            $this.find('form').submit();
-                                        },
-                                        Cancel: function () {
-                                            $(this).dialog("close");
-                                        }
-                                    }
-                                });
-                            }
-
-                            buttonDialog.dialog('open');
-
-                            $('#Job_Show_Job_Actions_LogRepair_Dialog_RepairerName').val($('#Job_JobMetaNonWarranty_RepairerName').val()).focus();
-                            $('#Job_Show_Job_Actions_LogRepair_Dialog_RepairerReference').val($('#Job_JobMetaNonWarranty_RepairerReference').val());
-
-                            return false;
-                        });
-                    });
-                </script>
+                @Html.ActionLinkSmallButton("Log Repair", MVC.Job.LogRepair(Model.Job.Id, null, null), "Job_Show_Job_Actions_LogRepair_Button")
             }
             @if (Model.Job.CanRepairComplete())
             { 
@@ -624,8 +842,7 @@
                 @Html.ActionLinkSmallButton("Convert to Non-Warranty", MVC.API.Job.ConvertHWarToHNWar(Model.Job.Id, true), "Job_Show_Job_Actions_ConvertToHNWar_Button")
                 <div id="Job_Show_Job_Actions_ConvertToHNWar_Dialog" class="dialog" title="Convert this Job?">
                     <p>
-                        <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
-                        This process is not reversible.<br />
+                        <i class="fa fa-exclamation-triangle fa-lg"></i>&nbsp;This process is not reversible.<br />
                         Are you sure?
                     </p>
                 </div>
@@ -669,15 +886,15 @@
             <td id="Job_Show_Device_Actions">
                 @if (Model.Job.CanDeviceHeld())
                 { 
-                    @Html.ActionLinkSmallButton("Held", MVC.API.Job.DeviceHeld(Model.Job.Id, true), "Job_Show_Device_Actions_Held_Button")
+                    @Html.ActionLinkSmallButton("Device Held", MVC.API.Job.DeviceHeld(Model.Job.Id, true), "Job_Show_Device_Actions_Held_Button")
                 }
                 @if (Model.Job.CanDeviceReadyForReturn())
                 { 
-                    @Html.ActionLinkSmallButton("Ready For Return", MVC.API.Job.DeviceReadyForReturn(Model.Job.Id, true), "Job_Show_Device_Actions_DeviceReadyForReturn_Button", "alert")
+                    @Html.ActionLinkSmallButton("Device Ready For Return", MVC.API.Job.DeviceReadyForReturn(Model.Job.Id, true), "Job_Show_Device_Actions_DeviceReadyForReturn_Button", "alert")
                 }
                 @if (Model.Job.CanDeviceReturned())
                 { 
-                    @Html.ActionLinkSmallButton("Returned", MVC.API.Job.DeviceReturned(Model.Job.Id, true), "Job_Show_Device_Actions_DeviceReturned_Button", Model.Job.CanDeviceReadyForReturn() ? null : "alert")
+                    @Html.ActionLinkSmallButton("Device Returned", MVC.API.Job.DeviceReturned(Model.Job.Id, true), "Job_Show_Device_Actions_DeviceReturned_Button", Model.Job.CanDeviceReadyForReturn() ? null : "alert")
                 }
             </td>
         }
@@ -688,7 +905,7 @@
 
                 @if (Model.Job.CanWaitingForUserAction())
                 { 
-                    <a id="Job_Show_User_Actions_WaitingForUserAction_Button" href="#" class="button small">Awaiting Action</a>
+                    <a id="Job_Show_User_Actions_WaitingForUserAction_Button" href="#" class="button small">Awaiting User Action</a>
                     <div id="Job_Show_User_Actions_WaitingForUserAction_Dialog" class="dialog" title="Waiting for User Action">
                         @using (Html.BeginForm(MVC.API.Job.WaitingForUserAction(Model.Job.Id, null, true)))
                         {
@@ -732,7 +949,7 @@
                 }
                 @if (Model.Job.CanNotWaitingForUserAction())
                 { 
-                    <a id="Job_Show_User_Actions_NotWaitingForUserAction_Button" href="#" class="button alert small">Action Resolved</a>
+                    <a id="Job_Show_User_Actions_NotWaitingForUserAction_Button" href="#" class="button alert small">User Action Resolved</a>
                     <div id="Job_Show_User_Actions_NotWaitingForUserAction_Dialog" class="dialog" title="Not Waiting for User Action">
                         @using (Html.BeginForm(MVC.API.Job.NotWaitingForUserAction(Model.Job.Id, null, true)))
                         {

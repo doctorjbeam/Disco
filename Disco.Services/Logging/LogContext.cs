@@ -54,9 +54,11 @@ namespace Disco.Services.Logging
                         LogModules = new Dictionary<int, LogBase>();
                         // Load all LogModules (Only from Disco Assemblies)
                         var appDomain = AppDomain.CurrentDomain;
+                        var servicesAssemblyName = typeof(LogContext).Assembly.GetName().Name;
 
                         var logModuleTypes = (from a in appDomain.GetAssemblies()
-                                              where !a.GlobalAssemblyCache && !a.IsDynamic && a.FullName.StartsWith("Disco.", StringComparison.InvariantCultureIgnoreCase)
+                                              where !a.GlobalAssemblyCache && !a.IsDynamic &&
+                                                (a.GetName().Name == servicesAssemblyName || a.GetReferencedAssemblies().Any(ra => ra.Name == servicesAssemblyName))
                                               from type in a.GetTypes()
                                               where typeof(LogBase).IsAssignableFrom(type) && !type.IsAbstract
                                               select type);
@@ -70,7 +72,7 @@ namespace Disco.Services.Logging
             }
         }
 
-        private static void InitalizeDatabase(Targets.LogPersistContext LogDatabase)
+        private static void InitalizeDatabase(Persistance.LogPersistContext LogDatabase)
         {
             // Add Modules
             var existingModules = LogDatabase.Modules.Include("EventTypes").ToDictionary(m => m.Id);
@@ -183,7 +185,7 @@ namespace Disco.Services.Logging
                 if (!File.Exists(logPath))
                 {
                     // Create Database
-                    using (var context = new Targets.LogPersistContext(connectionString))
+                    using (var context = new Persistance.LogPersistContext(connectionString))
                     {
                         context.Database.CreateIfNotExists();
                     }
@@ -191,7 +193,7 @@ namespace Disco.Services.Logging
 
                 // Add Modules/Event Types
                 InitalizeModules();
-                using (var context = new Targets.LogPersistContext(connectionString))
+                using (var context = new Persistance.LogPersistContext(connectionString))
                 {
                     InitalizeDatabase(context);
                 }
@@ -211,7 +213,7 @@ namespace Disco.Services.Logging
                     sqlCeCSB.DataSource = yesterdaysLogPath;
                     var connectionString = sqlCeCSB.ToString();
                     int logCount;
-                    using (var context = new Targets.LogPersistContext(connectionString))
+                    using (var context = new Persistance.LogPersistContext(connectionString))
                     {
                         logCount = context.Events.Where(e => !(e.ModuleId == 0 && e.EventTypeId == 100)).Count();
                         if (logCount == 0)
@@ -243,7 +245,8 @@ namespace Disco.Services.Logging
                 .WithSchedule(CronScheduleBuilder.DailyAtHourAndMinute(0, 0)) // Midnight
                 .Build();
 
-            _ReInitializeScheduler.ScheduleJob(reInitalizeJobDetail, reInitalizeTrigger);
+            if (!_ReInitializeScheduler.CheckExists(reInitalizeTrigger.Key))
+                _ReInitializeScheduler.ScheduleJob(reInitalizeJobDetail, reInitalizeTrigger);
         }
 
         private LogContext(string PersistantStorePath, string PersistantStoreConnectionString)
@@ -266,7 +269,7 @@ namespace Disco.Services.Logging
                     var eventTimestamp = DateTime.Now;
                     if (eventType.UseLive)
                     {
-                        Targets.LogLiveContext.Broadcast(logModule, eventType, eventTimestamp, Args);
+                        LogNotificationsHub.BroadcastLog(logModule, eventType, eventTimestamp, Args);
                     }
                     if (eventType.UsePersist)
                     {
@@ -275,7 +278,7 @@ namespace Disco.Services.Logging
                         {
                             args = JsonConvert.SerializeObject(Args);
                         }
-                        using (var context = new Targets.LogPersistContext(PersistantStoreConnectionString))
+                        using (var context = new Persistance.LogPersistContext(PersistantStoreConnectionString))
                         {
                             var e = new Models.LogEvent()
                             {

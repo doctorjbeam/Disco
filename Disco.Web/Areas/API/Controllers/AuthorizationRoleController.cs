@@ -1,12 +1,12 @@
 ﻿using Disco.BI.Extensions;
-using Disco.BI.Interop.ActiveDirectory;
-using Disco.Models.Interop.ActiveDirectory;
 using Disco.Models.Repository;
 using Disco.Services.Authorization;
 using Disco.Services.Authorization.Roles;
+using Disco.Services.Interop.ActiveDirectory;
 using Disco.Services.Users;
 using Disco.Services.Web;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Web.Mvc;
 
@@ -15,7 +15,6 @@ namespace Disco.Web.Areas.API.Controllers
     [DiscoAuthorize(Claims.DiscoAdminAccount)]
     public partial class AuthorizationRoleController : AuthorizedDatabaseController
     {
-
         #region Properties
 
         const string pName = "name";
@@ -75,7 +74,7 @@ namespace Disco.Web.Areas.API.Controllers
                     var oldRoleName = AuthorizationRole.Name;
                     AuthorizationRole.Name = Name;
                     UserService.UpdateAuthorizationRole(Database, AuthorizationRole);
-                    AuthorizationLog.LogRoleConfiguredRenamed(AuthorizationRole, CurrentUser.Id, oldRoleName);
+                    AuthorizationLog.LogRoleConfiguredRenamed(AuthorizationRole, CurrentUser.UserId, oldRoleName);
                 }
             }
         }
@@ -83,8 +82,8 @@ namespace Disco.Web.Areas.API.Controllers
         private void UpdateClaims(AuthorizationRole AuthorizationRole, string[] ClaimKeys)
         {
             var proposedClaims = Claims.BuildClaims(ClaimKeys);
-            
-            var currentToken = RoleToken.FromAuthorizationRole(AuthorizationRole);            
+
+            var currentToken = RoleToken.FromAuthorizationRole(AuthorizationRole);
             var currentClaimKeys = Claims.GetClaimKeys(currentToken.Claims);
             var removedClaims = currentClaimKeys.Except(ClaimKeys).ToArray();
             var addedClaims = ClaimKeys.Except(currentClaimKeys).ToArray();
@@ -93,9 +92,9 @@ namespace Disco.Web.Areas.API.Controllers
             UserService.UpdateAuthorizationRole(Database, AuthorizationRole);
 
             if (removedClaims.Length > 0)
-                AuthorizationLog.LogRoleConfiguredClaimsRemoved(AuthorizationRole, CurrentUser.Id, removedClaims);
+                AuthorizationLog.LogRoleConfiguredClaimsRemoved(AuthorizationRole, CurrentUser.UserId, removedClaims);
             if (addedClaims.Length > 0)
-                AuthorizationLog.LogRoleConfiguredClaimsAdded(AuthorizationRole, CurrentUser.Id, addedClaims);
+                AuthorizationLog.LogRoleConfiguredClaimsAdded(AuthorizationRole, CurrentUser.UserId, addedClaims);
         }
 
         private void UpdateSubjects(AuthorizationRole AuthorizationRole, string[] Subjects)
@@ -107,13 +106,18 @@ namespace Disco.Web.Areas.API.Controllers
             // Validate Subjects
             if (Subjects != null && Subjects.Length > 0)
             {
-                var subjects = Subjects.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()).Select(s => new Tuple<string, IActiveDirectoryObject>(s, ActiveDirectory.GetObject(s))).ToList();
+                var subjects = Subjects
+                    .Where(s => !string.IsNullOrWhiteSpace(s))
+                    .Select(s => s.Trim())
+                    .Select(s => Tuple.Create(s, ActiveDirectory.RetrieveADObject(s, Quick: true)))
+                    .Where(s => s.Item2 is ADUserAccount || s.Item2 is ADGroup)
+                    .ToList();
                 var invalidSubjects = subjects.Where(s => s.Item2 == null).ToList();
 
                 if (invalidSubjects.Count > 0)
                     throw new ArgumentException(string.Format("Subjects not found: {0}", string.Join(", ", invalidSubjects)), "Subjects");
 
-                var proposedSubjects = subjects.Select(s => s.Item2.SamAccountName).OrderBy(s => s).ToArray();
+                var proposedSubjects = subjects.Select(s => s.Item2.Id).OrderBy(s => s).ToArray();
                 var currentSubjects = AuthorizationRole.SubjectIds == null ? new string[0] : AuthorizationRole.SubjectIds.Split(',');
                 removedSubjects = currentSubjects.Except(proposedSubjects).ToArray();
                 addedSubjects = proposedSubjects.Except(currentSubjects).ToArray();
@@ -130,9 +134,9 @@ namespace Disco.Web.Areas.API.Controllers
                 UserService.UpdateAuthorizationRole(Database, AuthorizationRole);
 
                 if (removedSubjects != null && removedSubjects.Length > 0)
-                    AuthorizationLog.LogRoleConfiguredSubjectsRemoved(AuthorizationRole, CurrentUser.Id, removedSubjects);
+                    AuthorizationLog.LogRoleConfiguredSubjectsRemoved(AuthorizationRole, CurrentUser.UserId, removedSubjects);
                 if (addedSubjects != null && addedSubjects.Length > 0)
-                    AuthorizationLog.LogRoleConfiguredSubjectsAdded(AuthorizationRole, CurrentUser.Id, addedSubjects);
+                    AuthorizationLog.LogRoleConfiguredSubjectsAdded(AuthorizationRole, CurrentUser.UserId, addedSubjects);
             }
         }
 
@@ -230,27 +234,46 @@ namespace Disco.Web.Areas.API.Controllers
             }
         }
 
-        #endregion
-
-        public virtual ActionResult SearchSubjects(string term)
+        [HttpPost]
+        public virtual ActionResult UpdateAdministratorSubjects(string[] Subjects, bool redirect = false)
         {
-            var groupResults = BI.Interop.ActiveDirectory.ActiveDirectory.SearchGroups(term).Cast<IActiveDirectoryObject>();
-            var userResults = BI.Interop.ActiveDirectory.ActiveDirectory.SearchUsers(term).Cast<IActiveDirectoryObject>();
+            string[] proposedSubjects;
+            string[] removedSubjects = null;
+            string[] addedSubjects = null;
 
-            var results = groupResults.Concat(userResults).OrderBy(r => r.SamAccountName)
-                .Select(r => Models.AuthorizationRole.SubjectItem.FromActiveDirectoryObject(r)).ToList();
+            // Validate Subjects
+            if (Subjects == null || Subjects.Length == 0)
+                throw new ArgumentNullException("Subjects", "At least one Id must be supplied");
 
-            return Json(results, JsonRequestBehavior.AllowGet);
-        }
+            var subjects = Subjects
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(s => s.Trim())
+                .Select(s => Tuple.Create(s, ActiveDirectory.RetrieveADObject(s, Quick: true)))
+                .Where(s => s.Item2 is ADUserAccount || s.Item2 is ADGroup)
+                .ToList();
+            var invalidSubjects = subjects.Where(s => s.Item2 == null).ToList();
 
-        public virtual ActionResult Subject(string Id)
-        {
-            var subject = ActiveDirectory.GetObject(Id);
-            
-            if (subject == null || !(subject is ActiveDirectoryUserAccount || subject is ActiveDirectoryGroup))
-                return Json(null, JsonRequestBehavior.AllowGet);
+            if (invalidSubjects.Count > 0)
+                throw new ArgumentException(string.Format("Subjects not found: {0}", string.Join(", ", invalidSubjects)), "Subjects");
+
+            proposedSubjects = subjects.Select(s => s.Item2.Id).OrderBy(s => s).ToArray();
+            var currentSubjects = UserService.AdministratorSubjectIds;
+            removedSubjects = currentSubjects.Except(proposedSubjects).ToArray();
+            addedSubjects = proposedSubjects.Except(currentSubjects).ToArray();
+
+            UserService.UpdateAdministratorSubjectIds(Database, proposedSubjects);
+
+            if (removedSubjects != null && removedSubjects.Length > 0)
+                AuthorizationLog.LogAdministratorSubjectsRemoved(CurrentUser.UserId, removedSubjects);
+            if (addedSubjects != null && addedSubjects.Length > 0)
+                AuthorizationLog.LogAdministratorSubjectsAdded(CurrentUser.UserId, addedSubjects);
+
+            if (redirect)
+                return RedirectToAction(MVC.Config.AuthorizationRole.Index());
             else
-                return Json(Models.AuthorizationRole.SubjectItem.FromActiveDirectoryObject(subject), JsonRequestBehavior.AllowGet);
+                return Json("OK");
         }
+
+        #endregion
     }
 }

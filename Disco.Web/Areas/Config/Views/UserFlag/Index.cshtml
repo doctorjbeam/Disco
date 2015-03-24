@@ -1,0 +1,58 @@
+﻿@model Disco.Web.Areas.Config.Models.UserFlag.IndexModel
+@{
+    Authorization.Require(Claims.Config.UserFlag.Show);
+    ViewBag.Title = Html.ToBreadcrumb("Configuration", MVC.Config.Config.Index(), "User Flags");
+}
+<div id="Config_UserFlags_Index">
+    @if (Model.UserFlags.Count == 0)
+    {
+        <div class="form" style="width: 450px; padding: 100px 0;">
+            <h2>No user flags are configured</h2>
+        </div>  
+    }
+    else
+    {
+        <table class="tableData">
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Linked</th>
+            </tr>
+            @foreach (var item in Model.UserFlags)
+            {
+                <tr>
+                    <td>
+                        <a href="@Url.Action(MVC.Config.UserFlag.Index(item.Id))">
+                            <i class="fa fa-@(item.Icon) fa-lg d-@(item.IconColour)"></i>
+                            @item.Name
+                        </a>
+                    </td>
+                    <td>@if (string.IsNullOrWhiteSpace(item.Description))
+                        {
+                        <span class="smallMessage">&lt;none&gt;</span>
+                        }
+                        else
+                        {
+                        @item.Description.ToHtmlComment()
+                        }
+                    </td>
+                    <td>@if (item.UserDevicesLinkedGroup != null || item.UsersLinkedGroup != null)
+                        {
+                        <i class="fa fa-link fa-lg success"></i>
+                        }
+                        else
+                        {
+                        <i class="fa fa-unlink fa-lg information"></i>
+                        }
+                    </td>
+                </tr>
+            }
+        </table>
+    }
+    @if (Authorization.Has(Claims.Config.UserFlag.Create))
+    {
+        <div class="actionBar">
+            @Html.ActionLinkButton("Create User Flag", MVC.Config.UserFlag.Create())
+        </div>
+    }
+</div>

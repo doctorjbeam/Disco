@@ -20,14 +20,14 @@ namespace Disco.Models.Repository
         [Required, StringLength(10)]
         public string ShortName { get; set; }
 
-        [StringLength(500)]
+        [StringLength(500), DataType(DataType.MultilineText)]
         public string Description { get; set; }
 
         public int? DefaultOrganisationAddress { get; set; }
 
         // Migration from DeviceProfile Configuration
         // 2012-06-14 G#
-        [Required]
+        [Required, DataType(DataType.MultilineText)]
         public string ComputerNameTemplate { get; set; }
         
         [Required]
@@ -47,6 +47,9 @@ namespace Disco.Models.Repository
 
         public bool AllowUntrustedReimageJobEnrolment { get; set; }
 
+        public string DevicesLinkedGroup { get; set; }
+        public string AssignedUsersLinkedGroup { get; set; }
+
         public virtual IList<Device> Devices { get; set; }
 
         public override string ToString()
@@ -62,6 +65,8 @@ namespace Disco.Models.Repository
         // public bool AllocateCertificate { get; set; } // Renamed from 'AllocateWirelessCertificate'
         [StringLength(64)]
         public string CertificateProviderId { get; set; }
+
+        public const string DefaultComputerNameTemplate = "DeviceProfile.ShortName + '-' + SerialNumber";
 
         public enum DistributionTypes : int
         {

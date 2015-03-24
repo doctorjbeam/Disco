@@ -1,12 +1,19 @@
 ﻿using Disco.BI.Extensions;
-using Disco.BI.Interop.ActiveDirectory;
+using Disco.Models.Repository;
+using Disco.Models.Services.Devices.Importing;
 using Disco.Services.Authorization;
+using Disco.Services.Devices.Exporting;
+using Disco.Services.Devices.Importing;
+using Disco.Services.Interop.ActiveDirectory;
 using Disco.Services.Users;
 using Disco.Services.Web;
+using Disco.Web.Models.Device;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Web;
+using System.Web.Caching;
 using System.Web.Mvc;
 
 namespace Disco.Web.Areas.API.Controllers
@@ -21,6 +28,8 @@ namespace Disco.Web.Areas.API.Controllers
         const string pLocation = "location";
         const string pAllowUnauthenticatedEnrol = "allowunauthenticatedenrol";
         const string pDetailACAdapter = "detailacadapter";
+        const string pDetailBattery = "detailbattery";
+        const string pDetailKeyboard = "detailkeyboard";
 
         public virtual ActionResult Update(string id, string key, string value = null, bool redirect = false)
         {
@@ -64,6 +73,14 @@ namespace Disco.Web.Areas.API.Controllers
                         case pDetailACAdapter:
                             Authorization.Require(Claims.Device.Properties.Details);
                             UpdateDetailACAdapter(device, value);
+                            break;
+                        case pDetailBattery:
+                            Authorization.Require(Claims.Device.Properties.Details);
+                            UpdateDetailBattery(device, value);
+                            break;
+                        case pDetailKeyboard:
+                            Authorization.Require(Claims.Device.Properties.Details);
+                            UpdateDetailKeyboard(device, value);
                             break;
                         default:
                             throw new Exception("Invalid Update Key");
@@ -116,6 +133,9 @@ namespace Disco.Web.Areas.API.Controllers
         [DiscoAuthorize(Claims.Device.Actions.AssignUser)]
         public virtual ActionResult UpdateAssignedUserId(string id, string AssignedUserId = null, bool redirect = false)
         {
+            if (!string.IsNullOrWhiteSpace(AssignedUserId))
+                AssignedUserId = ActiveDirectory.ParseDomainAccountId(AssignedUserId);
+
             return Update(id, pAssignedUserId, AssignedUserId, redirect);
         }
 
@@ -131,10 +151,22 @@ namespace Disco.Web.Areas.API.Controllers
             return Update(id, pDetailACAdapter, DetailACAdapter, redirect);
         }
 
+        [DiscoAuthorize(Claims.Device.Properties.Details)]
+        public virtual ActionResult UpdateDetailBattery(string id, string DetailBattery = null, bool redirect = false)
+        {
+            return Update(id, pDetailBattery, DetailBattery, redirect);
+        }
+
+        [DiscoAuthorize(Claims.Device.Properties.Details)]
+        public virtual ActionResult UpdateDetailKeyboard(string id, string DetailKeyboard = null, bool redirect = false)
+        {
+            return Update(id, pDetailKeyboard, DetailKeyboard, redirect);
+        }
+
         #endregion
 
         #region Update Properties
-        private void UpdateDeviceProfileId(Disco.Models.Repository.Device device, string DeviceProfileId)
+        private void UpdateDeviceProfileId(Device device, string DeviceProfileId)
         {
             if (!string.IsNullOrEmpty(DeviceProfileId))
             {
@@ -148,9 +180,9 @@ namespace Disco.Web.Areas.API.Controllers
                         device.DeviceProfile = p;
 
                         // Update AD Account
-                        if (!string.IsNullOrEmpty(device.ComputerName) && device.ComputerName.Length <= 24)
+                        if (ActiveDirectory.IsValidDomainAccountId(device.DeviceDomainId))
                         {
-                            var adMachineAccount = ActiveDirectory.GetMachineAccount(device.ComputerName);
+                            var adMachineAccount = ActiveDirectory.RetrieveADMachineAccount(device.DeviceDomainId);
                             if (adMachineAccount != null)
                                 adMachineAccount.SetDescription(device);
                         }
@@ -162,7 +194,7 @@ namespace Disco.Web.Areas.API.Controllers
             }
             throw new Exception("Invalid Device Profile Id");
         }
-        private void UpdateDeviceBatchId(Disco.Models.Repository.Device device, string DeviceBatchId)
+        private void UpdateDeviceBatchId(Device device, string DeviceBatchId)
         {
             if (!string.IsNullOrEmpty(DeviceBatchId))
             {
@@ -191,7 +223,7 @@ namespace Disco.Web.Areas.API.Controllers
             }
             throw new Exception("Invalid Device Batch Id");
         }
-        private void UpdateAssetNumber(Disco.Models.Repository.Device device, string AssetNumber)
+        private void UpdateAssetNumber(Device device, string AssetNumber)
         {
             if (string.IsNullOrWhiteSpace(AssetNumber))
                 device.AssetNumber = null;
@@ -199,7 +231,7 @@ namespace Disco.Web.Areas.API.Controllers
                 device.AssetNumber = AssetNumber.Trim();
             Database.SaveChanges();
         }
-        private void UpdateLocation(Disco.Models.Repository.Device device, string Location)
+        private void UpdateLocation(Device device, string Location)
         {
             if (string.IsNullOrWhiteSpace(Location))
                 device.Location = null;
@@ -207,10 +239,10 @@ namespace Disco.Web.Areas.API.Controllers
                 device.Location = Location.Trim();
             Database.SaveChanges();
         }
-        private void UpdateAssignedUserId(Disco.Models.Repository.Device device, string UserId)
+        private void UpdateAssignedUserId(Device device, string UserId)
         {
             var daus = Database.DeviceUserAssignments.Where(m => m.DeviceSerialNumber == device.SerialNumber && m.UnassignedDate == null);
-            Disco.Models.Repository.User u = null;
+            User u = null;
             if (!string.IsNullOrEmpty(UserId))
             {
                 u = UserService.GetUser(UserId, Database, true);
@@ -222,7 +254,7 @@ namespace Disco.Web.Areas.API.Controllers
             device.AssignDevice(Database, u);
             Database.SaveChanges();
         }
-        private void UpdateAllowUnauthenticatedEnrol(Disco.Models.Repository.Device device, string AllowUnauthenticatedEnrol)
+        private void UpdateAllowUnauthenticatedEnrol(Device device, string AllowUnauthenticatedEnrol)
         {
             bool bAllowUnauthenticatedEnrol;
             if (string.IsNullOrEmpty(AllowUnauthenticatedEnrol) || !bool.TryParse(AllowUnauthenticatedEnrol, out bAllowUnauthenticatedEnrol))
@@ -236,12 +268,28 @@ namespace Disco.Web.Areas.API.Controllers
                 Database.SaveChanges();
             }
         }
-        private void UpdateDetailACAdapter(Disco.Models.Repository.Device device, string ACAdapter)
+        private void UpdateDetailACAdapter(Device device, string ACAdapter)
         {
             if (string.IsNullOrWhiteSpace(ACAdapter))
                 device.DeviceDetails.ACAdapter(device, null);
             else
                 device.DeviceDetails.ACAdapter(device, ACAdapter.Trim());
+            Database.SaveChanges();
+        }
+        private void UpdateDetailBattery(Device device, string Battery)
+        {
+            if (string.IsNullOrWhiteSpace(Battery))
+                device.DeviceDetails.Battery(device, null);
+            else
+                device.DeviceDetails.Battery(device, Battery.Trim());
+            Database.SaveChanges();
+        }
+        private void UpdateDetailKeyboard(Device device, string Keyboard)
+        {
+            if (string.IsNullOrWhiteSpace(Keyboard))
+                device.DeviceDetails.Keyboard(device, null);
+            else
+                device.DeviceDetails.Keyboard(device, Keyboard.Trim());
             Database.SaveChanges();
         }
         #endregion
@@ -257,7 +305,7 @@ namespace Disco.Web.Areas.API.Controllers
             {
                 if (d.CanDecommission())
                 {
-                    d.OnDecommission((Disco.Models.Repository.Device.DecommissionReasons)Reason);
+                    d.OnDecommission((DecommissionReasons)Reason);
 
                     Database.SaveChanges();
                     if (redirect)
@@ -361,6 +409,9 @@ namespace Disco.Web.Areas.API.Controllers
         [DiscoAuthorize(Claims.Device.Show)]
         public virtual ActionResult LastNetworkLogonDate(string id)
         {
+            if (string.IsNullOrWhiteSpace(id))
+                throw new ArgumentNullException("id", "The Device Serial Number is required");
+
             var device = Database.Devices.Find(id);
             if (device == null)
             {
@@ -373,7 +424,7 @@ namespace Disco.Web.Areas.API.Controllers
             var result = new
             {
                 Timestamp = device.LastNetworkLogonDate,
-                Friendly = device.LastNetworkLogonDate.ToFuzzy("Unknown"),
+                UnixEpoc = device.LastNetworkLogonDate.ToUnixEpoc(),
                 Formatted = device.LastNetworkLogonDate.ToFullDateTime("Unknown")
             };
 
@@ -410,7 +461,7 @@ namespace Disco.Web.Areas.API.Controllers
                 var thumbPath = da.RepositoryThumbnailFilename(Database);
                 if (System.IO.File.Exists(thumbPath))
                 {
-                    if (thumbPath.EndsWith(".png", StringComparison.InvariantCultureIgnoreCase))
+                    if (thumbPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                         return File(thumbPath, "image/png");
                     else
                         return File(thumbPath, "image/jpg");
@@ -433,13 +484,13 @@ namespace Disco.Web.Areas.API.Controllers
                     if (file.ContentLength > 0)
                     {
                         var contentType = file.ContentType;
-                        if (string.IsNullOrEmpty(contentType) || contentType.Equals("unknown/unknown", StringComparison.InvariantCultureIgnoreCase))
+                        if (string.IsNullOrEmpty(contentType) || contentType.Equals("unknown/unknown", StringComparison.OrdinalIgnoreCase))
                             contentType = BI.Interop.MimeTypes.ResolveMimeType(file.FileName);
 
-                        var da = new Disco.Models.Repository.DeviceAttachment()
+                        var da = new DeviceAttachment()
                         {
                             DeviceSerialNumber = d.SerialNumber,
-                            TechUserId = UserService.CurrentUserId,
+                            TechUserId = UserService.CurrentUser.UserId,
                             Filename = file.FileName,
                             MimeType = contentType,
                             Timestamp = DateTime.Now,
@@ -463,7 +514,7 @@ namespace Disco.Web.Areas.API.Controllers
         [DiscoAuthorize(Claims.Device.ShowAttachments)]
         public virtual ActionResult Attachment(int id)
         {
-            var da = Database.DeviceAttachments.Include("TechUser").Where(m => m.Id == id).FirstOrDefault();
+            var da = Database.DeviceAttachments.Include("DocumentTemplate").Include("TechUser").Where(m => m.Id == id).FirstOrDefault();
             if (da != null)
             {
 
@@ -481,7 +532,7 @@ namespace Disco.Web.Areas.API.Controllers
         [DiscoAuthorize(Claims.Device.ShowAttachments)]
         public virtual ActionResult Attachments(string id)
         {
-            var d = Database.Devices.Include("DeviceAttachments.TechUser").Where(m => m.SerialNumber == id).FirstOrDefault();
+            var d = Database.Devices.Include("DeviceAttachments.DocumentTemplate").Include("DeviceAttachments.TechUser").Where(m => m.SerialNumber == id).FirstOrDefault();
             if (d != null)
             {
                 var m = new Models.Attachment.AttachmentsModel()
@@ -501,7 +552,7 @@ namespace Disco.Web.Areas.API.Controllers
             var da = Database.DeviceAttachments.Include("TechUser").Where(m => m.Id == id).FirstOrDefault();
             if (da != null)
             {
-                if (da.TechUserId.Equals(CurrentUser.Id, StringComparison.InvariantCultureIgnoreCase))
+                if (da.TechUserId.Equals(CurrentUser.UserId, StringComparison.OrdinalIgnoreCase))
                     Authorization.RequireAny(Claims.Device.Actions.RemoveAnyAttachments, Claims.Device.Actions.RemoveOwnAttachments);
                 else
                     Authorization.Require(Claims.Device.Actions.RemoveAnyAttachments);
@@ -515,10 +566,27 @@ namespace Disco.Web.Areas.API.Controllers
 
         #endregion
 
-        #region Importing / Exporting
+        #region Importing
+        internal const string ImportSessionCacheKey = "DeviceImportContext_{0}";
+
+        internal static void Import_StoreContext(DeviceImportContext Context)
+        {
+            string key = string.Format(ImportSessionCacheKey, Context.SessionId);
+            HttpRuntime.Cache.Insert(key, Context, null, DateTime.Now.AddMinutes(60), Cache.NoSlidingExpiration, CacheItemPriority.NotRemovable, null);
+        }
+        internal static DeviceImportContext Import_RetrieveContext(string SessionId, bool Remove = false)
+        {
+            string key = string.Format(ImportSessionCacheKey, SessionId);
+            DeviceImportContext context = HttpRuntime.Cache.Get(key) as DeviceImportContext;
+
+            if (Remove && context != null)
+                HttpRuntime.Cache.Remove(key);
+
+            return context;
+        }
 
         [DiscoAuthorize(Claims.Device.Actions.Import)]
-        public virtual ActionResult ImportParse(HttpPostedFileBase ImportFile)
+        public virtual ActionResult ImportBegin(HttpPostedFileBase ImportFile, bool HasHeader)
         {
             if (ImportFile == null || ImportFile.ContentLength == 0)
                 throw new ArgumentNullException("ImportFile");
@@ -527,37 +595,104 @@ namespace Disco.Web.Areas.API.Controllers
             if (fileName.Contains(@"\"))
                 fileName = fileName.Substring(fileName.LastIndexOf('\\') + 1);
 
-            var status = Disco.BI.DeviceBI.Importing.ImportParseTask.Run(ImportFile.InputStream, fileName);
+            var context = DeviceImport.BeginImport(Database, fileName, HasHeader, ImportFile.InputStream);
+            Import_StoreContext(context);
 
-            status.SetFinishedUrl(Url.Action(MVC.Device.ImportReview(status.SessionId)));
-
-            return RedirectToAction(MVC.Config.Logging.TaskStatus(status.SessionId));
+            return RedirectToAction(MVC.Device.ImportHeaders(context.SessionId));
         }
 
         [DiscoAuthorize(Claims.Device.Actions.Import)]
-        public virtual ActionResult ImportProcess(string ParseTaskSessionKey)
+        public virtual ActionResult ImportParse(string Id, List<DeviceImportFieldTypes> Headers)
         {
-            if (string.IsNullOrWhiteSpace(ParseTaskSessionKey))
-                throw new ArgumentNullException("ParseTaskSessionKey");
+            if (string.IsNullOrWhiteSpace(Id))
+                throw new ArgumentNullException("Id");
 
-            var status = Disco.BI.DeviceBI.Importing.ImportProcessTask.Run(ParseTaskSessionKey);
+            var context = Import_RetrieveContext(Id);
 
-            status.SetFinishedUrl(Url.Action(MVC.Device.Index()));
+            if (context == null)
+                throw new ArgumentException("The Import Session Id is invalid or the session timed out (60 minutes), try importing again", "Id");
+
+            context.UpdateHeaderTypes(Headers);
+
+            var status = DeviceImportParseTask.ScheduleNow(context);
+
+            var finishedUrl = MVC.Device.ImportReview(context.SessionId);
+
+            status.SetFinishedUrl(Url.Action(finishedUrl));
+
+            if (status.WaitUntilFinished(TimeSpan.FromSeconds(2)))
+                return RedirectToAction(finishedUrl);
+            else
+                return RedirectToAction(MVC.Config.Logging.TaskStatus(status.SessionId));
+        }
+
+        [DiscoAuthorize(Claims.Device.Actions.Import)]
+        public virtual ActionResult ImportApply(string Id)
+        {
+            if (string.IsNullOrWhiteSpace(Id))
+                throw new ArgumentNullException("Id");
+
+            var context = Import_RetrieveContext(Id);
+
+            if (context == null)
+                throw new ArgumentException("The Import Session Id is invalid or the session timed out (60 minutes), try importing again", "Id");
+
+            var status = DeviceImportApplyTask.ScheduleNow(context);
+            status.SetFinishedUrl(Url.Action(MVC.Device.Import(context.SessionId)));
 
             return RedirectToAction(MVC.Config.Logging.TaskStatus(status.SessionId));
         }
 
+        #endregion
+
+        #region Exporting
+        internal const string ExportSessionCacheKey = "DeviceExportContext_{0}";
+
         [DiscoAuthorize(Claims.Device.Actions.Export)]
-        public virtual ActionResult ExportAllDevices()
+        public virtual ActionResult Export(ExportModel Model)
         {
-            // Non-Decommissioned Devices
-            var devices = Database.Devices.Where(d => !d.DecommissionedDate.HasValue);
+            if (Model == null || Model.Options == null)
+                throw new ArgumentNullException("Model");
 
-            var export = BI.DeviceBI.Importing.Export.GenerateExport(devices);
+            // Write Options to Configuration
+            Database.DiscoConfiguration.Devices.LastExportOptions = Model.Options;
+            Database.SaveChanges();
 
-            var filename = string.Format("DiscoDeviceExport-AllDevices-{0:yyyyMMdd-HHmmss}.csv", DateTime.Now);
+            // Start Export
+            var exportContext = DeviceExportTask.ScheduleNow(Model.Options);
 
-            return File(export, "text/csv", filename);
+            // Store Export Context in Web Cache
+            string key = string.Format(ExportSessionCacheKey, exportContext.TaskStatus.SessionId);
+            HttpRuntime.Cache.Insert(key, exportContext, null, DateTime.Now.AddMinutes(60), Cache.NoSlidingExpiration, CacheItemPriority.NotRemovable, null);
+
+            // Set Task Finished Url
+            var finishedActionResult = MVC.Device.Export(exportContext.TaskStatus.SessionId, null, null);
+            exportContext.TaskStatus.SetFinishedUrl(Url.Action(finishedActionResult));
+
+            // Try waiting for completion
+            if (exportContext.TaskStatus.WaitUntilFinished(TimeSpan.FromSeconds(2)))
+                return RedirectToAction(finishedActionResult);
+            else
+                return RedirectToAction(MVC.Config.Logging.TaskStatus(exportContext.TaskStatus.SessionId));
+        }
+        [DiscoAuthorize(Claims.Device.Actions.Export)]
+        public virtual ActionResult ExportRetrieve(string Id)
+        {
+            if (string.IsNullOrWhiteSpace(Id))
+                throw new ArgumentNullException("Id");
+
+            string key = string.Format(ExportSessionCacheKey, Id);
+            var context = HttpRuntime.Cache.Get(key) as DeviceExportTaskContext;
+
+            if (context == null)
+                throw new ArgumentException("The Id specified is invalid, or the export data expired (60 minutes)", "Id");
+
+            if (context.Result == null || context.Result.CsvResult == null)
+                throw new ArgumentException("The export session is still running, or failed to complete successfully", "Id");
+
+            var filename = string.Format("DiscoDeviceExport-{0:yyyyMMdd-HHmmss}.csv", context.TaskStatus.StartedTimestamp.Value);
+
+            return File(context.Result.CsvResult.ToArray(), "text/csv", filename);
         }
 
         #endregion

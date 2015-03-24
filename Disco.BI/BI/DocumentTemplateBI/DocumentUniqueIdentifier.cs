@@ -1,5 +1,6 @@
 using Disco.Data.Repository;
 using Disco.Models.Repository;
+using Disco.Services.Interop.ActiveDirectory;
 using System;
 namespace Disco.BI.DocumentTemplateBI
 {
@@ -61,14 +62,14 @@ namespace Disco.BI.DocumentTemplateBI
         public string DataScope { get; private set; }
         public static bool IsDocumentUniqueIdentifier(string UniqueIdentifier)
         {
-            return UniqueIdentifier.StartsWith("Disco|", System.StringComparison.InvariantCultureIgnoreCase);
+            return UniqueIdentifier.StartsWith("Disco|", System.StringComparison.OrdinalIgnoreCase);
         }
         public DocumentUniqueIdentifier(string TemplateTypeId, string DataId, string CreatorId, DateTime TimeStamp, int? Page = null, string Tag = null)
         {
             this.Tag = Tag;
             this.TemplateTypeId = TemplateTypeId;
             this.DataId = DataId;
-            this.CreatorId = CreatorId;
+            this.CreatorId = ActiveDirectory.ParseDomainAccountId(CreatorId);
             this.TimeStamp = TimeStamp;
             this.Page = Page ?? 0;
         }
@@ -93,7 +94,7 @@ namespace Disco.BI.DocumentTemplateBI
                 }
                 if (s.Length >= 5)
                 {
-                    this.CreatorId = s[4];
+                    this.CreatorId = ActiveDirectory.ParseDomainAccountId(s[4]);
                 }
                 if (s.Length >= 6)
                 {
@@ -180,7 +181,7 @@ namespace Disco.BI.DocumentTemplateBI
                             }
                             break;
                         case DocumentTemplate.DocumentTemplateScopes.User:
-                            User u = Database.Users.Find(this.DataId);
+                            User u = Database.Users.Find(ActiveDirectory.ParseDomainAccountId(this.DataId));
                             if (u != null)
                             {
                                 this._data = u;

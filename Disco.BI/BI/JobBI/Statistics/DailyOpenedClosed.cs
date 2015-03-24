@@ -24,6 +24,7 @@ namespace Disco.BI.JobBI.Statistics
         public override string TaskName { get { return "Job Statistics - Daily Opened/Closed Task"; } }
         public override bool SingleInstanceTask { get { return true; } }
         public override bool CancelInitiallySupported { get { return false; } }
+        public override bool LogExceptionsOnly { get { return true; } }
 
         public override void InitalizeScheduledTask(DiscoDataContext Database)
         {
@@ -100,7 +101,6 @@ namespace Disco.BI.JobBI.Statistics
             else
             {
                 DateTime? previousValue = e.GetPreviousPropertyValue<DateTime?>("ClosedDate");
-                DateTime? currentValue = e.GetCurrentPropertyValue<DateTime?>("ClosedDate");
 
                 if (previousValue.HasValue)
                 {
@@ -116,21 +116,23 @@ namespace Disco.BI.JobBI.Statistics
                         affectedStat.TotalJobs += 1;
                     }
                 }
+            }
 
-                if (currentValue.HasValue)
+            DateTime? currentValue = e.GetCurrentPropertyValue<DateTime?>("ClosedDate");
+
+            if (currentValue.HasValue)
+            {
+                // Add Statistics
+                // Remove Statistics
+                var statItem = _data.FirstOrDefault(i => i.Timestamp == currentValue.Value.Date);
+                if (statItem != null)
                 {
-                    // Add Statistics
-                    // Remove Statistics
-                    var statItem = _data.FirstOrDefault(i => i.Timestamp == currentValue.Value.Date);
-                    if (statItem != null)
-                    {
-                        statItem.ClosedJobs += 1;
-                        statItem.TotalJobs -= 1;
-                    }
-                    foreach (var affectedStat in _data.Where(i => i.Timestamp > currentValue))
-                    {
-                        affectedStat.TotalJobs -= 1;
-                    }
+                    statItem.ClosedJobs += 1;
+                    statItem.TotalJobs -= 1;
+                }
+                foreach (var affectedStat in _data.Where(i => i.Timestamp > currentValue))
+                {
+                    affectedStat.TotalJobs -= 1;
                 }
             }
         }

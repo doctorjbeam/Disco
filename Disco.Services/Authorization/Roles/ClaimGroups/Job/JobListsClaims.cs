@@ -9,10 +9,20 @@ namespace Disco.Services.Authorization.Roles.ClaimGroups.Job
     [ClaimDetails("Lists", "Permissions related to Job Lists")]
     public class JobListsClaims : BaseRoleClaimGroup
     {
+        [ClaimDetails("Job Queue Lists", "Can show job queue lists")]
+        public bool JobQueueLists { get; set; }
+
+        [ClaimDetails("My Jobs List", "Can show list")]
+        public bool MyJobs { get; set; }
+        [ClaimDetails("My Jobs List (Includes No Queue)", "Can show list")]
+        public bool MyJobsOrphaned { get; set; }
+
         [ClaimDetails("Awaiting Technician Action List", "Can show list")]
         public bool AwaitingTechnicianAction { get; set; }
         [ClaimDetails("Long Running Jobs List", "Can show list")]
         public bool LongRunningJobs { get; set; }
+        [ClaimDetails("Stale Jobs List", "Can show list")]
+        public bool StaleJobs { get; set; }
 
         [ClaimDetails("All Open List", "Can show list")]
         public bool AllOpen { get; set; }

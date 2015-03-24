@@ -33,7 +33,7 @@
 </div>
 <div id="dialogRemove" title="Delete this Page?">
     <p>
-        <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
+        <i class="fa fa-exclamation-triangle fa-lg warning"></i>
         Are you sure?
     </p>
 </div>
@@ -70,11 +70,19 @@
         var urlImporterUndetectedDelete = '@(Url.Action(MVC.API.DocumentTemplate.ImporterUndetectedDelete()))/';
         var $undetectedPageDialog = $('#undetectedPageDialog').dialog({
             modal: true,
-            height: 850,
             width: 800,
             resizable: false,
             autoOpen: false
         });
+
+        function resizeUndetectedPageDialog() {
+            var dialogHeight = Math.min($(window).height() - 120, 805);
+            $undetectedPageDialog.height(dialogHeight);
+            $undetectedPageDialog.find('.pagePreview').height(dialogHeight - 105);
+        }
+        resizeUndetectedPageDialog();
+
+        $(window).resize(resizeUndetectedPageDialog);
 
         $dialogRemove = $('#dialogRemove').dialog({
             resizable: false,

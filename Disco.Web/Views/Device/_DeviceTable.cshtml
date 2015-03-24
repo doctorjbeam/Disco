@@ -1,6 +1,9 @@
-﻿@model IEnumerable<Disco.Models.BI.Search.DeviceSearchResultItem>
+﻿@model IEnumerable<Disco.Models.Services.Searching.DeviceSearchResultItem>
 @{
     var canShowDevices = Authorization.Has(Claims.Device.Show);
+    var canShowUsers = Authorization.Has(Claims.User.Show);
+
+    Html.BundleDeferred("~/ClientScripts/Modules/Disco-DataTableHelpers");
 }
 <div class="genericData deviceTable">
     @if (Model != null && Model.Count() > 0)
@@ -18,6 +21,8 @@
                     </th>
                     <th>Profile
                     </th>
+                    <th>Batch
+                    </th>
                     <th>Assigned User
                     </th>
                     <th>Jobs
@@ -30,9 +35,9 @@
                     <tr class="@(item.DecommissionedDate.HasValue ? "decommissioned" : string.Empty)">
                         <td>
                             @if (canShowDevices)
-                            {@Html.ActionLink(item.SerialNumber, MVC.Device.Show(item.SerialNumber))}
+                            {@Html.ActionLink(item.Id, MVC.Device.Show(item.Id))}
                             else
-                            {@item.SerialNumber}
+                            {@item.Id}
                         </td>
                         <td>
                             @item.AssetNumber
@@ -64,13 +69,31 @@
                             @item.DeviceProfileDescription
                         </td>
                         <td>
+                            @if (item.DeviceBatchName != null)
+                            {
+                                <span>@item.DeviceBatchName</span>
+                            }
+                            else
+                            { 
+                                <span class="smallMessage">N/A</span>                    
+                            }
+                        </td>
+                        <td>
                             @if (string.IsNullOrEmpty(item.AssignedUserId))
                             {
                                 <span class="smallMessage">N/A</span>                 
                             }
                             else
                             { 
-                                <span>@item.AssignedUserDescription</span>
+                                <span>@if (canShowUsers)
+                                      {
+                                    @Html.ActionLink(item.AssignedUserDescription, MVC.User.Show(item.AssignedUserId))
+                                      }
+                                      else
+                                      {
+                                    @item.AssignedUserDescription
+                                      }
+                                </span>
                             }
                         </td>
                         <td>

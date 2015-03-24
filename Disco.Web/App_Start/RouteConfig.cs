@@ -5,7 +5,6 @@ using System.Web;
 using System.Web.Mvc;
 using System.Web.Routing;
 using Microsoft.AspNet.SignalR;
-using Disco.BI.Interop.SignalRHandlers;
 
 namespace Disco.Web
 {
@@ -16,7 +15,7 @@ namespace Disco.Web
             // Install Route
             routes.MapRoute(
                 name: "InitialConfig", // Route name
-                url: "{controller}/{action}/{id}", // URL with parameters
+                url: "{action}/{id}", // URL with parameters
                 defaults: new { controller = "InitialConfig", action = "Index", id = UrlParameter.Optional }, // Parameter defaults
                 namespaces: new string[] { "Disco.Web.Controllers" } // Controllers Namespace Only
             );
@@ -37,7 +36,8 @@ namespace Disco.Web
             routes.MapRoute(
                 name: "SearchQuery",
                 url: "Search/Query/{SearchQuery}",
-                defaults: new { controller = "Search", action = "Query", SearchQuery = UrlParameter.Optional }
+                defaults: new { controller = "Search", action = "Query", SearchQuery = UrlParameter.Optional },
+                namespaces: new string[] { "Disco.Web.Controllers" } // Controllers Namespace Only
             );
             // User Route
             routes.MapRoute(
@@ -73,11 +73,6 @@ namespace Disco.Web
 
         public static void RegisterUpdateRoutes(RouteCollection routes)
         {
-            // Task Status SignalR Route
-            routes.MapConnection<ScheduledTasksStatusNotifications>(
-                "API_Logging_TaskStatusNotifications",
-                "API/Logging/TaskStatusNotifications", new ConnectionConfiguration(), SignalRAuthenticationWorkaround.AddMiddleware);
-
             // Task Status Ajax Route
             routes.MapRoute(
                 name: "API_Logging_ScheduledTaskStatus", // Route name

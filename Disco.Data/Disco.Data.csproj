@@ -40,26 +40,30 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\packages\EntityFramework.5.0.0\lib\net45\EntityFramework.dll</HintPath>
     </Reference>
-    <Reference Include="Newtonsoft.Json, Version=4.5.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\Newtonsoft.Json.5.0.8\lib\net45\Newtonsoft.Json.dll</HintPath>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.6.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.DataAnnotations" />
     <Reference Include="System.Core" />
     <Reference Include="System.Data.Entity" />
+    <Reference Include="System.DirectoryServices" />
     <Reference Include="System.Drawing" />
-    <Reference Include="System.Reactive.Core">
-      <HintPath>..\packages\Rx-Core.2.1.30214.0\lib\Net45\System.Reactive.Core.dll</HintPath>
+    <Reference Include="System.Reactive.Core, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-Core.2.2.5\lib\net45\System.Reactive.Core.dll</HintPath>
     </Reference>
-    <Reference Include="System.Reactive.Interfaces">
-      <HintPath>..\packages\Rx-Interfaces.2.1.30214.0\lib\Net45\System.Reactive.Interfaces.dll</HintPath>
+    <Reference Include="System.Reactive.Interfaces, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-Interfaces.2.2.5\lib\net45\System.Reactive.Interfaces.dll</HintPath>
     </Reference>
-    <Reference Include="System.Reactive.Linq">
-      <HintPath>..\packages\Rx-Linq.2.1.30214.0\lib\Net45\System.Reactive.Linq.dll</HintPath>
+    <Reference Include="System.Reactive.Linq, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-Linq.2.2.5\lib\net45\System.Reactive.Linq.dll</HintPath>
     </Reference>
-    <Reference Include="System.Reactive.PlatformServices">
-      <HintPath>..\packages\Rx-PlatformServices.2.1.30214.0\lib\Net45\System.Reactive.PlatformServices.dll</HintPath>
+    <Reference Include="System.Reactive.PlatformServices, Version=2.2.5.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\Rx-PlatformServices.2.2.5\lib\net45\System.Reactive.PlatformServices.dll</HintPath>
     </Reference>
     <Reference Include="System.Web" />
     <Reference Include="System.Xml.Linq" />
@@ -69,13 +73,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Configuration\CommunityHelpers.cs" />
     <Compile Include="Configuration\ConfigurationBase.cs" />
     <Compile Include="Configuration\ConfigurationCache.cs" />
+    <Compile Include="Configuration\Modules\ActiveDirectoryConfiguration.cs" />
+    <Compile Include="Configuration\Modules\DevicesConfiguration.cs" />
     <Compile Include="Configuration\Modules\JobPreferencesConfiguration.cs" />
     <Compile Include="Configuration\SystemConfiguration.cs" />
     <Compile Include="Configuration\Modules\BootstrapperConfiguration.cs" />
-    <Compile Include="Configuration\Modules\DeviceProfileConfiguration.cs" />
     <Compile Include="Configuration\Modules\DeviceProfilesConfiguration.cs" />
     <Compile Include="Configuration\Modules\OrganisationAddressesConfiguration.cs" />
     <Compile Include="Migrations\201204250418485_DBv0.cs" />
@@ -126,6 +130,26 @@
     <Compile Include="Migrations\201310282325491_DBv11.Designer.cs">
       <DependentUpon>201310282325491_DBv11.cs</DependentUpon>
     </Compile>
+    <Compile Include="Migrations\201402032322432_DBv12.cs" />
+    <Compile Include="Migrations\201402032322432_DBv12.Designer.cs">
+      <DependentUpon>201402032322432_DBv12.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Migrations\201404080227546_DBv13.cs" />
+    <Compile Include="Migrations\201404080227546_DBv13.Designer.cs">
+      <DependentUpon>201404080227546_DBv13.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Migrations\201406160912525_DBv14.cs" />
+    <Compile Include="Migrations\201406160912525_DBv14.Designer.cs">
+      <DependentUpon>201406160912525_DBv14.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Migrations\201407100413342_DBv15.cs" />
+    <Compile Include="Migrations\201407100413342_DBv15.Designer.cs">
+      <DependentUpon>201407100413342_DBv15.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Migrations\201407260624238_DBv16.cs" />
+    <Compile Include="Migrations\201407260624238_DBv16.Designer.cs">
+      <DependentUpon>201407260624238_DBv16.cs</DependentUpon>
+    </Compile>
     <Compile Include="Migrations\Configuration.cs" />
     <Compile Include="Migrations\DiscoDataMigrator.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -174,6 +198,21 @@
     <EmbeddedResource Include="Migrations\201310282325491_DBv11.resx">
       <DependentUpon>201310282325491_DBv11.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Migrations\201402032322432_DBv12.resx">
+      <DependentUpon>201402032322432_DBv12.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Migrations\201404080227546_DBv13.resx">
+      <DependentUpon>201404080227546_DBv13.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Migrations\201406160912525_DBv14.resx">
+      <DependentUpon>201406160912525_DBv14.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Migrations\201407100413342_DBv15.resx">
+      <DependentUpon>201407100413342_DBv15.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Migrations\201407260624238_DBv16.resx">
+      <DependentUpon>201407260624238_DBv16.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -185,12 +224,6 @@
     <None Include="Resources\EmptyLogo.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <ProjectExtensions>
-    <VisualStudio>
-      <UserProperties BuildVersion_BuildAction="Both" BuildVersion_UseGlobalSettings="False" BuildVersion_DetectChanges="False" BuildVersion_StartDate="2011/7/1" BuildVersion_BuildVersioningStyle="None.DeltaBaseYear.MonthAndDayStamp.TimeStamp" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_UpdateFileVersion="True" />
-    </VisualStudio>
-  </ProjectExtensions>
-  <Import Project="$(SolutionDir)\.nuget\nuget.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

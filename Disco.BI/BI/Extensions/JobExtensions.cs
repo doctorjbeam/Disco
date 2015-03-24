@@ -8,6 +8,7 @@ using System.IO;
 using Disco.Models.BI.DocumentTemplates;
 using Disco.Services.Plugins;
 using Disco.Models.BI.Job;
+using Disco.Services.Authorization;
 
 namespace Disco.BI.Extensions
 {
@@ -15,13 +16,13 @@ namespace Disco.BI.Extensions
     {
         public static JobAttachment CreateAttachment(this Job Job, DiscoDataContext Database, User CreatorUser, string Filename, string MimeType, string Comments, Stream Content, DocumentTemplate DocumentTemplate = null, byte[] PdfThumbnail = null)
         {
-            if (string.IsNullOrEmpty(MimeType) || MimeType.Equals("unknown/unknown", StringComparison.InvariantCultureIgnoreCase))
+            if (string.IsNullOrEmpty(MimeType) || MimeType.Equals("unknown/unknown", StringComparison.OrdinalIgnoreCase))
                 MimeType = Interop.MimeTypes.ResolveMimeType(Filename);
 
             JobAttachment ja = new JobAttachment()
             {
                 JobId = Job.Id,
-                TechUserId = CreatorUser.Id,
+                TechUserId = CreatorUser.UserId,
                 Filename = Filename,
                 MimeType = MimeType,
                 Timestamp = DateTime.Now,
@@ -42,108 +43,6 @@ namespace Disco.BI.Extensions
                 ja.SaveThumbnailAttachment(Database, PdfThumbnail);
 
             return ja;
-        }
-
-        public static Tuple<string, string> Status(this Job j)
-        {
-            var statusId = j.CalculateStatusId();
-            return new Tuple<string, string>(statusId, JobBI.Utilities.JobStatusDescription(statusId, j));
-        }
-
-        public static JobTableModel.JobTableItemModelIncludeStatus ToJobTableItemModelIncludeStatus(this Job j)
-        {
-            var i = new JobTableModel.JobTableItemModelIncludeStatus()
-                    {
-                        Id = j.Id,
-                        OpenedDate = j.OpenedDate,
-                        ClosedDate = j.ClosedDate,
-                        TypeId = j.JobTypeId,
-                        TypeDescription = j.JobType.Description,
-                        Location = j.DeviceHeldLocation,
-
-                        WaitingForUserAction = j.WaitingForUserAction,
-                        DeviceReadyForReturn = j.DeviceReadyForReturn,
-                        DeviceHeld = j.DeviceHeld,
-                        DeviceReturnedDate = j.DeviceReturnedDate
-                    };
-
-            if (j.Device != null)
-            {
-                i.DeviceSerialNumber = j.DeviceSerialNumber;
-                i.DeviceModelDescription = j.Device.DeviceModel.Description;
-                i.DeviceAddressId = j.Device.DeviceProfile.DefaultOrganisationAddress;
-
-                if (j.JobMetaWarranty != null)
-                {
-                    i.JobMetaWarranty_ExternalReference = j.JobMetaWarranty.ExternalReference;
-                    i.JobMetaWarranty_ExternalCompletedDate = j.JobMetaWarranty.ExternalCompletedDate;
-                    i.JobMetaWarranty_ExternalName = j.JobMetaWarranty.ExternalName;
-                }
-                if (j.JobMetaNonWarranty != null)
-                {
-                    i.JobMetaNonWarranty_RepairerLoggedDate = j.JobMetaNonWarranty.RepairerLoggedDate;
-                    i.JobMetaNonWarranty_RepairerCompletedDate = j.JobMetaNonWarranty.RepairerCompletedDate;
-                    i.JobMetaNonWarranty_AccountingChargeAddedDate = j.JobMetaNonWarranty.AccountingChargeAddedDate;
-                    i.JobMetaNonWarranty_AccountingChargePaidDate = j.JobMetaNonWarranty.AccountingChargePaidDate;
-                    i.JobMetaNonWarranty_AccountingChargeRequiredDate = j.JobMetaNonWarranty.AccountingChargeRequiredDate;
-                    i.JobMetaNonWarranty_IsInsuranceClaim = j.JobMetaNonWarranty.IsInsuranceClaim;
-                    i.JobMetaNonWarranty_RepairerName = j.JobMetaNonWarranty.RepairerName;
-                    if (j.JobMetaInsurance != null)
-                    {
-                        i.JobMetaInsurance_ClaimFormSentDate = j.JobMetaInsurance.ClaimFormSentDate;
-                    }
-                }
-
-            }
-            if (j.User != null)
-            {
-                i.UserId = j.UserId;
-                i.UserDisplayName = j.User.DisplayName;
-            }
-            if (j.OpenedTechUser != null)
-            {
-                i.OpenedTechUserId = j.OpenedTechUserId;
-                i.OpenedTechUserDisplayName = j.OpenedTechUser.DisplayName;
-            }
-
-            return i;
-        }
-
-        public static string CalculateStatusId(this Job j)
-        {
-            return j.ToJobTableItemModelIncludeStatus().CalculateStatusId();
-        }
-
-        public static string CalculateStatusId(this JobTableModel.JobTableItemModelIncludeStatus j)
-        {
-            if (j.ClosedDate.HasValue)
-                return Job.JobStatusIds.Closed;
-
-            if (j.TypeId == JobType.JobTypeIds.HWar)
-            {
-                if (!string.IsNullOrEmpty(j.JobMetaWarranty_ExternalReference) && !j.JobMetaWarranty_ExternalCompletedDate.HasValue)
-                    return Job.JobStatusIds.AwaitingWarrantyRepair; // Job Logged - but not marked as completed
-            }
-
-            if (j.TypeId == JobType.JobTypeIds.HNWar)
-            {
-                if (j.JobMetaNonWarranty_RepairerLoggedDate.HasValue && !j.JobMetaNonWarranty_RepairerCompletedDate.HasValue)
-                    return Job.JobStatusIds.AwaitingRepairs; // Repairs logged - but not complete
-                if (j.JobMetaNonWarranty_AccountingChargeAddedDate.HasValue && !j.JobMetaNonWarranty_AccountingChargePaidDate.HasValue)
-                    return Job.JobStatusIds.AwaitingAccountingPayment; // Accounting Charge Added, but not paid
-                if (j.JobMetaNonWarranty_AccountingChargeRequiredDate.HasValue && (!j.JobMetaNonWarranty_AccountingChargePaidDate.HasValue || !j.JobMetaNonWarranty_AccountingChargeAddedDate.HasValue))
-                    return Job.JobStatusIds.AwaitingAccountingCharge; // Accounting Charge Required, but not added or paid
-                if (j.JobMetaNonWarranty_RepairerLoggedDate.HasValue && j.JobMetaNonWarranty_IsInsuranceClaim.Value && !j.JobMetaInsurance_ClaimFormSentDate.HasValue)
-                    return Job.JobStatusIds.AwaitingInsuranceProcessing; // Is insurance claim, but no Claim Form Sent
-            }
-
-            if (j.WaitingForUserAction.HasValue)
-                return Job.JobStatusIds.AwaitingUserAction; // Awaiting for User
-
-            if (j.DeviceReadyForReturn.HasValue && !j.DeviceReturnedDate.HasValue)
-                return Job.JobStatusIds.AwaitingDeviceReturn; // Device not returned to User
-
-            return Job.JobStatusIds.Open;
         }
 
         public static List<DocumentTemplate> AvailableDocumentTemplates(this Job j, DiscoDataContext Database, User User, DateTime TimeStamp)
@@ -233,23 +132,23 @@ namespace Disco.BI.Extensions
             if (addedSubTypes.Count > 0 || removedSubTypes.Count > 0)
             {
                 StringBuilder logBuilder = new StringBuilder();
-                logBuilder.AppendLine("Updated Job Sub Types");
+                logBuilder.AppendLine("# Updated Job Sub Types");
                 if (removedSubTypes.Count > 0)
                 {
-                    logBuilder.AppendLine("Removed:");
+                    logBuilder.AppendLine().AppendLine("Removed:");
                     foreach (var t in removedSubTypes)
-                        logBuilder.Append("- ").AppendLine(t.ToString());
+                        logBuilder.Append("- **").Append(t.ToString()).AppendLine("**");
                 }
                 if (addedSubTypes.Count > 0)
                 {
-                    logBuilder.AppendLine("Added:");
+                    logBuilder.AppendLine().AppendLine("Added:");
                     foreach (var t in addedSubTypes)
-                        logBuilder.Append("- ").AppendLine(t.ToString());
+                        logBuilder.Append("- **").Append(t.ToString()).AppendLine("**");
                 }
                 Database.JobLogs.Add(new JobLog()
                 {
                     JobId = j.Id,
-                    TechUserId = TechUser.Id,
+                    TechUserId = TechUser.UserId,
                     Timestamp = DateTime.Now,
                     Comments = logBuilder.ToString()
                 });
@@ -278,12 +177,12 @@ namespace Disco.BI.Extensions
                 }
                 foreach (var c in addedComponents)
                 {
-                    if (!j.JobComponents.Any(jc => jc.Description.Equals(c.Description, StringComparison.InvariantCultureIgnoreCase)))
+                    if (!j.JobComponents.Any(jc => jc.Description.Equals(c.Description, StringComparison.OrdinalIgnoreCase)))
                     { // Job Component with matching Description doesn't exist.
                         Database.JobComponents.Add(new JobComponent()
                         {
                             Job = j,
-                            TechUserId = TechUser.Id,
+                            TechUserId = TechUser.UserId,
                             Cost = c.Cost,
                             Description = c.Description
                         });
@@ -292,5 +191,42 @@ namespace Disco.BI.Extensions
             }
         }
 
+        private static List<string> FilterCreatableTypePermissions(AuthorizationToken Authorization)
+        {
+            if (!Authorization.HasAll(Claims.Job.Types.CreateHMisc, Claims.Job.Types.CreateHNWar, Claims.Job.Types.CreateHWar, Claims.Job.Types.CreateSApp, Claims.Job.Types.CreateSImg, Claims.Job.Types.CreateSOS, Claims.Job.Types.CreateUMgmt))
+            {
+                // Must Filter
+                List<string> allowedTypes = new List<string>(6);
+                if (Authorization.Has(Claims.Job.Types.CreateHMisc))
+                    allowedTypes.Add(JobType.JobTypeIds.HMisc);
+                if (Authorization.Has(Claims.Job.Types.CreateHNWar))
+                    allowedTypes.Add(JobType.JobTypeIds.HNWar);
+                if (Authorization.Has(Claims.Job.Types.CreateHWar))
+                    allowedTypes.Add(JobType.JobTypeIds.HWar);
+                if (Authorization.Has(Claims.Job.Types.CreateSApp))
+                    allowedTypes.Add(JobType.JobTypeIds.SApp);
+                if (Authorization.Has(Claims.Job.Types.CreateSImg))
+                    allowedTypes.Add(JobType.JobTypeIds.SImg);
+                if (Authorization.Has(Claims.Job.Types.CreateSOS))
+                    allowedTypes.Add(JobType.JobTypeIds.SOS);
+                if (Authorization.Has(Claims.Job.Types.CreateUMgmt))
+                    allowedTypes.Add(JobType.JobTypeIds.UMgmt);
+
+                return allowedTypes;
+            }
+            return null;
+        }
+
+        public static IQueryable<JobType> FilterCreatableTypePermissions(this IQueryable<JobType> JobTypes, AuthorizationToken Authorization)
+        {
+            var allowedTypes = FilterCreatableTypePermissions(Authorization);
+
+            if (allowedTypes != null)
+            {
+                return JobTypes.Where(jt => allowedTypes.Contains(jt.Id));
+            }
+
+            return JobTypes;
+        }
     }
 }

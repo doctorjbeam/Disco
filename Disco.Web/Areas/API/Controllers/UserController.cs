@@ -1,5 +1,6 @@
 ﻿using Disco.BI.Extensions;
 using Disco.Services.Authorization;
+using Disco.Services.Interop.ActiveDirectory;
 using Disco.Services.Users;
 using Disco.Services.Web;
 using System;
@@ -11,12 +12,6 @@ namespace Disco.Web.Areas.API.Controllers
 {
     public partial class UserController : AuthorizedDatabaseController
     {
-        [DiscoAuthorize(Claims.User.Search)]
-        public virtual ActionResult UpstreamUsers(string term)
-        {
-            return Json(BI.UserBI.Searching.SearchUpstream(term), JsonRequestBehavior.AllowGet);
-        }
-
         #region User Attachements
 
         [DiscoAuthorize(Claims.User.ShowAttachments)]
@@ -49,7 +44,7 @@ namespace Disco.Web.Areas.API.Controllers
                 var thumbPath = ua.RepositoryThumbnailFilename(Database);
                 if (System.IO.File.Exists(thumbPath))
                 {
-                    if (thumbPath.EndsWith(".png", StringComparison.InvariantCultureIgnoreCase))
+                    if (thumbPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                         return File(thumbPath, "image/png");
                     else
                         return File(thumbPath, "image/jpg");
@@ -61,8 +56,10 @@ namespace Disco.Web.Areas.API.Controllers
         }
 
         [DiscoAuthorize(Claims.User.Actions.AddAttachments)]
-        public virtual ActionResult AttachmentUpload(string id, string Comments)
+        public virtual ActionResult AttachmentUpload(string id, string Domain, string Comments)
         {
+            id = ActiveDirectory.ParseDomainAccountId(id, Domain);
+
             var u = Database.Users.Find(id);
             if (u != null)
             {
@@ -72,13 +69,13 @@ namespace Disco.Web.Areas.API.Controllers
                     if (file.ContentLength > 0)
                     {
                         var contentType = file.ContentType;
-                        if (string.IsNullOrEmpty(contentType) || contentType.Equals("unknown/unknown", StringComparison.InvariantCultureIgnoreCase))
+                        if (string.IsNullOrEmpty(contentType) || contentType.Equals("unknown/unknown", StringComparison.OrdinalIgnoreCase))
                             contentType = BI.Interop.MimeTypes.ResolveMimeType(file.FileName);
 
                         var ua = new Disco.Models.Repository.UserAttachment()
                         {
-                            UserId = u.Id,
-                            TechUserId = UserService.CurrentUserId,
+                            UserId = u.UserId,
+                            TechUserId = UserService.CurrentUser.UserId,
                             Filename = file.FileName,
                             MimeType = contentType,
                             Timestamp = DateTime.Now,
@@ -102,7 +99,7 @@ namespace Disco.Web.Areas.API.Controllers
         [DiscoAuthorize(Claims.User.ShowAttachments)]
         public virtual ActionResult Attachment(int id)
         {
-            var ua = Database.UserAttachments.Include("TechUser").Where(m => m.Id == id).FirstOrDefault();
+            var ua = Database.UserAttachments.Include("DocumentTemplate").Include("TechUser").Where(m => m.Id == id).FirstOrDefault();
             if (ua != null)
             {
 
@@ -118,9 +115,11 @@ namespace Disco.Web.Areas.API.Controllers
         }
 
         [DiscoAuthorize(Claims.User.ShowAttachments)]
-        public virtual ActionResult Attachments(string id)
+        public virtual ActionResult Attachments(string id, string Domain)
         {
-            var u = Database.Users.Include("UserAttachments.TechUser").Where(m => m.Id == id).FirstOrDefault();
+            id = ActiveDirectory.ParseDomainAccountId(id, Domain);
+
+            var u = Database.Users.Include("UserAttachments.DocumentTemplate").Include("UserAttachments.TechUser").Where(m => m.UserId == id).FirstOrDefault();
             if (u != null)
             {
                 var m = new Models.Attachment.AttachmentsModel()
@@ -140,7 +139,7 @@ namespace Disco.Web.Areas.API.Controllers
             var ua = Database.UserAttachments.Include("TechUser").Where(m => m.Id == id).FirstOrDefault();
             if (ua != null)
             {
-                if (ua.TechUserId.Equals(CurrentUser.Id, StringComparison.InvariantCultureIgnoreCase))
+                if (ua.TechUserId.Equals(CurrentUser.UserId, StringComparison.OrdinalIgnoreCase))
                     Authorization.RequireAny(Claims.User.Actions.RemoveAnyAttachments, Claims.User.Actions.RemoveOwnAttachments);
                 else
                     Authorization.Require(Claims.User.Actions.RemoveAnyAttachments);
@@ -155,12 +154,15 @@ namespace Disco.Web.Areas.API.Controllers
         #endregion
 
         [DiscoAuthorize(Claims.User.Actions.GenerateDocuments)]
-        public virtual ActionResult GeneratePdf(string id, string DocumentTemplateId)
+        public virtual ActionResult GeneratePdf(string id, string Domain, string DocumentTemplateId)
         {
             if (string.IsNullOrEmpty(id))
                 throw new ArgumentNullException("id");
             if (string.IsNullOrEmpty(DocumentTemplateId))
                 throw new ArgumentNullException("AttachmentTypeId");
+
+            id = ActiveDirectory.ParseDomainAccountId(id, Domain);
+
             var user = Database.Users.Find(id);
             if (user != null)
             {
@@ -174,7 +176,7 @@ namespace Disco.Web.Areas.API.Controllers
                         pdf = documentTemplate.GeneratePdf(Database, user, UserService.CurrentUser, timeStamp, generationState);
                     }
                     Database.SaveChanges();
-                    return File(pdf, "application/pdf", string.Format("{0}_{1}_{2:yyyyMMdd-HHmmss}.pdf", documentTemplate.Id, user.Id, timeStamp));
+                    return File(pdf, "application/pdf", string.Format("{0}_{1}_{2:yyyyMMdd-HHmmss}.pdf", documentTemplate.Id, user.UserId, timeStamp));
                 }
                 else
                 {

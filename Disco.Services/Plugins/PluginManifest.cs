@@ -145,11 +145,16 @@ namespace Disco.Services.Plugins
                 "Disco.Web",
                 "Disco.Web.Extensions",
                 "EntityFramework",
+                "Exceptionless",
+                "Exceptionless.Models",
+                "Exceptionless.Mvc",
                 "itextsharp",
                 "LumenWorks.Framework.IO",
+                "MarkdownSharp",
                 "Microsoft.AspNet.SignalR.Core",
-                "Microsoft.AspNet.SignalR.Owin",
                 "Microsoft.AspNet.SignalR.SystemWeb",
+                "Microsoft.Owin",
+                "Microsoft.Owin.Security",
                 "Microsoft.Owin.Host.SystemWeb",
                 "Microsoft.Web.Infrastructure",
                 "Newtonsoft.Json",
@@ -240,7 +245,7 @@ namespace Disco.Services.Plugins
 
             foreach (string referenceFilename in Directory.EnumerateFiles(pluginLocation, "*.dll", SearchOption.TopDirectoryOnly))
             {
-                if (!referenceFilename.Equals(assembly.Location, StringComparison.InvariantCultureIgnoreCase))
+                if (!referenceFilename.Equals(assembly.Location, StringComparison.OrdinalIgnoreCase))
                 {
                     // Ignore Excluded Assemblies
                     if (!PluginExcludedAssemblies.Contains(Path.GetFileNameWithoutExtension(referenceFilename)))

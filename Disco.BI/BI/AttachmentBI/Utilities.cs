@@ -1,9 +1,10 @@
-﻿using System;
+﻿using Disco.BI.Extensions;
+using Exceptionless;
+using iTextSharp.text.pdf;
+using System;
 using System.Drawing;
 using System.IO;
 using System.Linq;
-using Disco.BI.Extensions;
-using iTextSharp.text.pdf;
 
 namespace Disco.BI.AttachmentBI
 {
@@ -15,10 +16,10 @@ namespace Disco.BI.AttachmentBI
             if (Source != null)
             {
                 // GDI+ (jpg, png, gif, bmp)
-                if (SourceMimeType.Equals("image/jpeg", StringComparison.InvariantCultureIgnoreCase) || SourceMimeType.Contains("jpg") ||
-                    SourceMimeType.Equals("image/png", StringComparison.InvariantCultureIgnoreCase) || SourceMimeType.Contains("png") ||
-                    SourceMimeType.Equals("image/gif", StringComparison.InvariantCultureIgnoreCase) || SourceMimeType.Contains("gif") ||
-                    SourceMimeType.Equals("image/bmp", StringComparison.InvariantCultureIgnoreCase) || SourceMimeType.Contains("bmp"))
+                if (SourceMimeType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase) || SourceMimeType.Contains("jpg") ||
+                    SourceMimeType.Equals("image/png", StringComparison.OrdinalIgnoreCase) || SourceMimeType.Contains("png") ||
+                    SourceMimeType.Equals("image/gif", StringComparison.OrdinalIgnoreCase) || SourceMimeType.Contains("gif") ||
+                    SourceMimeType.Equals("image/bmp", StringComparison.OrdinalIgnoreCase) || SourceMimeType.Contains("bmp"))
                 {
                     try
                     {
@@ -33,16 +34,17 @@ namespace Disco.BI.AttachmentBI
                             }
                         }
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
+                        ex.ToExceptionless().Submit();
+
                         // Ignore Thumbnail Generation exceptions for images
-                        //throw;
                     }
                     
                 }
 
                 // PDF
-                if (SourceMimeType.Equals("application/pdf", StringComparison.InvariantCultureIgnoreCase) || SourceMimeType.Contains("pdf"))
+                if (SourceMimeType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) || SourceMimeType.Contains("pdf"))
                 {
                     PdfReader pdfReader = new PdfReader(Source);
                     try
@@ -62,6 +64,10 @@ namespace Disco.BI.AttachmentBI
                                 }
                             }
                         }
+                    }
+                    catch (Exception ex)
+                    {
+                        ex.ToExceptionless().Submit();
                     }
                     finally
                     {

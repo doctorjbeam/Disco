@@ -1,10 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Disco.Data.Repository;
+using Disco.Services.Interop.DiscoServices;
+using Exceptionless;
+using Exceptionless.Configuration;
+using System;
 using System.Linq;
 using System.Web;
-using Disco.Data.Repository;
-using System.Threading;
-using System.Reflection;
+
+[assembly: Exceptionless("https://errors.discoict.com.au", "c81e644582374f68aaf1fb546e3db0cd")]
 
 namespace Disco.Web
 {
@@ -27,14 +29,20 @@ namespace Disco.Web
             return true;
         }
 
-        private static void InitalizeEnvironment(DiscoDataContext Database)
+        public static void InitalizeCoreEnvironment(DiscoDataContext Database)
         {
+            ExceptionlessClient.Current.SendingError += Exceptionless_SendingError;
+
             // Initialize Logging
             Disco.Services.Logging.LogContext.Initalize(Database, DiscoApplication.SchedulerFactory);
 
             // Load Organisation Name
+            DiscoApplication.DeploymentId = Database.DiscoConfiguration.DeploymentId;
             DiscoApplication.OrganisationName = Database.DiscoConfiguration.OrganisationName;
             DiscoApplication.MultiSiteMode = Database.DiscoConfiguration.MultiSiteMode;
+
+            // Initialize Active Directory Interop
+            Disco.Services.Interop.ActiveDirectory.ActiveDirectory.Initialize(Database);
 
             // Setup Global Proxy
             DiscoApplication.SetGlobalProxy(Database.DiscoConfiguration.ProxyAddress,
@@ -43,30 +51,45 @@ namespace Disco.Web
                 Database.DiscoConfiguration.ProxyPassword);
 
             // Initialize User Service Interop
-            Disco.Services.Users.UserService.Initialize(Database,
-                (UserId, AdditionalProperties) => Disco.BI.Interop.ActiveDirectory.ActiveDirectory.GetUserAccount(UserId, AdditionalProperties),
-                (UserId, AdditionalProperties) => Disco.BI.Interop.ActiveDirectory.ActiveDirectory.GetMachineAccount(UserId, null, null, AdditionalProperties));
+            Disco.Services.Users.UserService.Initialize(Database);
+        }
 
+        static void Exceptionless_SendingError(object sender, ErrorModelEventArgs e)
+        {
+            e.Error.UserName = DiscoApplication.DeploymentId;
+            e.Error.UserDescription = DiscoApplication.OrganisationName;
+            
+            e.Error.Tags.Add(string.Concat("v", DiscoApplication.Version));
         }
 
         public static void InitalizeNormalEnvironment(DiscoDataContext Database)
         {
-            InitalizeEnvironment(Database);
+            InitalizeCoreEnvironment(Database);
 
             // Initialize Expressions
             BI.Expressions.Expression.InitializeExpressions();
 
-            // Initialize Warranty Providers Plugins
+            // Initialize Job Queues
+            Disco.Services.Jobs.JobQueues.JobQueueService.Initialize(Database);
+
+            // Initialize User Flags
+            Disco.Services.Users.UserFlags.UserFlagService.Initialize(Database);
+
+            // Initialize Satellite Managed Groups (which don't belong to any other component)
+            Disco.Services.Devices.ManagedGroups.DeviceManagedGroups.Initialize(Database);
+            Disco.BI.DocumentTemplateBI.ManagedGroups.DocumentTemplateManagedGroups.Initialize(Database);
+
+            // Initialize Plugins
             Disco.Services.Plugins.Plugins.InitalizePlugins(Database);
 
             // Initialize Scheduled Tasks
             Disco.Services.Tasks.ScheduledTasks.InitalizeScheduledTasks(Database, DiscoApplication.SchedulerFactory, true);
 
             // Schedule Immediate Check for Update (if never updated, or last updated over 2 days ago)
-            if (Database.DiscoConfiguration.UpdateLastCheck == null ||
-                Database.DiscoConfiguration.UpdateLastCheck.ResponseTimestamp < DateTime.Now.AddDays(-2))
+            if (Database.DiscoConfiguration.UpdateLastCheckResponse == null ||
+                Database.DiscoConfiguration.UpdateLastCheckResponse.UpdateResponseDate < DateTime.Now.AddDays(-2))
             {
-                Disco.BI.Interop.Community.UpdateCheckTask.ScheduleNow();
+                UpdateQueryTask.ScheduleNow();
             }
 
             // Setup Attachment Monitor
@@ -74,14 +97,11 @@ namespace Disco.Web
 
             DiscoApplication.DocumentDropBoxMonitor.StartWatching();
             DiscoApplication.DocumentDropBoxMonitor.ScheduleCurrentFiles(10);
-
-            // Enable SignalR-based Repository Notifications
-            Disco.BI.Interop.SignalRHandlers.RepositoryMonitorNotifications.Initialize();
         }
 
         public static void InitializeUpdateEnvironment(DiscoDataContext Database, Version PreviousVersion)
         {
-            InitalizeEnvironment(Database);
+            InitalizeCoreEnvironment(Database);
 
             // Initialize Scheduled Tasks
             Disco.Services.Tasks.ScheduledTasks.InitalizeScheduledTasks(Database, DiscoApplication.SchedulerFactory, true);

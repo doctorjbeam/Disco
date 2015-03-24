@@ -60,7 +60,9 @@ if (!document.DiscoFunctions.PropertyChangeHelper) {
         if (PropertyField[0].nodeName.toLowerCase() == 'textarea') {
             PropertyField.keydown(function () {
                 $ajaxSave.show();
-            })
+            }).blur(function () {
+                $ajaxSave.hide();
+            });
         }
     }
 };
@@ -100,7 +102,7 @@ if (!document.DiscoFunctions.DateChangeUserHelper) {
         if (dateOnly) {
             DateField.datepicker({
                 defaultDate: new Date(),
-                minDate: minDate,
+                minDate: moment(minDate).toDate(),
                 changeYear: true,
                 changeMonth: true,
                 dateFormat: 'yy/mm/dd',
@@ -115,7 +117,7 @@ if (!document.DiscoFunctions.DateChangeUserHelper) {
             DateField.datetimepicker({
                 defaultDate: new Date(),
                 ampm: true,
-                minDate: minDate,
+                minDate: moment(minDate).toDate(),
                 changeYear: true,
                 changeMonth: true,
                 dateFormat: 'yy/mm/dd',
@@ -165,7 +167,7 @@ if (!document.DiscoFunctions.DateChangeHelper) {
         if (dateOnly) {
             DateField.datepicker({
                 defaultDate: new Date(),
-                minDate: minDate,
+                minDate: moment(minDate).toDate(),
                 changeYear: true,
                 changeMonth: true,
                 dateFormat: 'yy/mm/dd',
@@ -180,7 +182,7 @@ if (!document.DiscoFunctions.DateChangeHelper) {
             DateField.datetimepicker({
                 defaultDate: new Date(),
                 ampm: true,
-                minDate: minDate,
+                minDate: moment(minDate).toDate(),
                 changeYear: true,
                 changeMonth: true,
                 dateFormat: 'yy/mm/dd',
@@ -259,13 +261,13 @@ if (!document.DiscoFunctions.DateDialogCreateUpdater)
                     $ajaxLoading.hide();
                 } else {
                     if (response.DateTimeFull) {
-                        $dateField.attr('data-datetimeformatted', response.DateTimeJavascript)
-                            .attr('data-discodatetime', response.DateTimeSortable)
+                        $dateField.attr('data-isodate', response.DateTimeISO8601)
+                            .attr('data-livestamp', response.DateTimeUnixEpoc)
                             .attr('title', response.DateTimeFull)
                             .text(response.DateTimeFriendly);
                     } else {
-                        $dateField.attr('data-datetimeformatted', '')
-                            .attr('data-discodatetime', '-1')
+                        $dateField.attr('data-isodate', '')
+                            .attr('data-livestamp', '-1')
                             .attr('title', notSetDisplay)
                             .text(notSetDisplay);
                     }
@@ -300,7 +302,7 @@ if (!document.DiscoFunctions.DateDialogCreateUpdater)
         d.dialog('option', 'title', friendlyName);
         dialogHeader.text(friendlyName + ' Date');
 
-        var dfVal = $('#' + DateField).attr('data-datetimeformatted');
+        var dfVal = $('#' + DateField).attr('data-isodate');
 
         if (dfVal)
             dialogDateBox.datetimepicker('setDate', new Date(dfVal));
@@ -308,7 +310,7 @@ if (!document.DiscoFunctions.DateDialogCreateUpdater)
             dialogDateBox.datetimepicker('setDate', new Date());
 
         if (MinDate)
-            dialogDateBox.datetimepicker('option', 'minDate', MinDate);
+            dialogDateBox.datetimepicker('option', 'minDate', moment(minDate).toDate());
         else
             dialogDateBox.datetimepicker('option', 'minDate', null);
 

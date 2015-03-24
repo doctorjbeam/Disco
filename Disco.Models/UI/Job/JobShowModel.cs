@@ -1,16 +1,19 @@
-﻿using System;
+﻿using Disco.Models.BI.Job;
+using Disco.Models.Services.Jobs.JobLists;
+using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Disco.Models.UI.Job
 {
     public interface JobShowModel : BaseUIModel
     {
         Repository.Job Job { get; set; }
-        bool IsLongRunning { get; set; }
+        TimeSpan? LongRunning { get; set; }
         List<Repository.DocumentTemplate> AvailableDocumentTemplates { get; set; }
         List<Repository.JobSubType> UpdatableJobSubTypes { get; set; }
+        List<Repository.JobQueue> AvailableQueues { get; set; }
+
+        LocationModes LocationMode { get; set; }
+        List<JobLocationReference> LocationOptions { get; set; }
     }
 }

@@ -1,4 +1,4 @@
-﻿using Disco.Models.Authorization;
+﻿using Disco.Models.Services.Authorization;
 using Disco.Models.Repository;
 using Disco.Services.Authorization.Roles;
 using System;
@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Disco.Services.Interop.ActiveDirectory;
 
 namespace Disco.Services.Authorization
 {
@@ -18,12 +19,12 @@ namespace Disco.Services.Authorization
 
         #region Token Builders
 
-        public static AuthorizationToken BuildToken(User User, List<string> GroupMembership)
+        public static AuthorizationToken BuildToken(User User, IEnumerable<string> GroupMembership)
         {
             return new AuthorizationToken()
             {
                 User = User,
-                GroupMembership = GroupMembership,
+                GroupMembership = GroupMembership.ToList(),
                 RoleTokens = RoleCache.GetRoleTokens(GroupMembership, User)
             };
         }
@@ -49,8 +50,8 @@ namespace Disco.Services.Authorization
         internal const string RequireDiscoAuthorizationMessage = "Your account does not have the required permission to access this feature. This feature requires your account to be included in at least one Disco Authorization Role.";
         internal const string RequireMessageTemplate = "Your account does not have the required permission to access this feature.\r\n";
         internal const string RequireMessageSingleTemplate = RequireMessageTemplate + "This feature requires the following permission:\r\n- {0}";
-        internal const string RequireAllMessageTemplate = RequireMessageTemplate + "This feature requires permission for:{0}.";
-        internal const string RequireAnyMessageTemplate = RequireMessageTemplate + "This feature requires at least one of these permissions:{0}.";
+        internal const string RequireAllMessageTemplate = RequireMessageTemplate + "This feature requires permission for:\r\n- {0}";
+        internal const string RequireAnyMessageTemplate = RequireMessageTemplate + "This feature requires at least one of these permissions:\r\n- {0}";
 
         internal static string BuildRequireMessage(string ClaimKey)
         {

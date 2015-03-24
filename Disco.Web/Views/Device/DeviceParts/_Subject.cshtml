@@ -1,4 +1,5 @@
 ﻿@model Disco.Web.Models.Device.ShowModel
+@using Disco.Services.Users.UserFlags;
 @{
     Authorization.Require(Claims.Device.Show);
 
@@ -15,11 +16,24 @@
                             </td>
                             <td>@if (string.IsNullOrWhiteSpace(Model.Device.ComputerName))
                                 {
-                                <span id="Device_Show_Details_Asset_NameUnknown" title="Computer Name" class="smallMessage">&lt;Unknown/Not Allocated&gt;</span>
+                                <span id="Device_Show_Details_Asset_NameUnknown" title="Computer Name" class="smallMessage">&lt;Unknown/None&gt;</span>
                                 }
                                 else
                                 {
                                 <h4 id="Device_Show_Details_Asset_Name" title="Computer Name">@Model.Device.ComputerName</h4>
+                                }
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><span title="Domain Name">Domain:</span>
+                            </td>
+                            <td>@if (string.IsNullOrWhiteSpace(Model.Device.ComputerDomainName))
+                                {
+                                <span id="Device_Show_Details_Asset_DomainUnknown" title="Computer Domain" class="smallMessage">&lt;None&gt;</span>
+                                }
+                                else
+                                {
+                                <h4 id="Device_Show_Details_Asset_Domain" title="Computer Domain">@Model.Device.ComputerDomainName</h4>
                                 }
                             </td>
                         </tr>
@@ -32,7 +46,7 @@
                                 }
                                 else
                                 {
-                                    <span class="small discreet">@Model.Device.AssetNumber</span>
+                                    <span class="small discreet">@(Model.Device.AssetNumber ?? "Unknown")</span>
                                 }
                             </td>
                         </tr>
@@ -45,7 +59,7 @@
                                 }
                                 else
                                 {
-                                    <span class="small discreet">@Model.Device.Location</span>
+                                    <span class="small discreet">@(Model.Device.Location ?? "Unknown")</span>
                                 }
                             </td>
                         </tr>
@@ -135,21 +149,26 @@
                                         var spanProgress = null;
 
                                         $.getJSON('@(Url.Action(MVC.API.Device.LastNetworkLogonDate(Model.Device.SerialNumber)))', function (response, result) {
-
                                             updated = true;
                                             if (spanProgress)
-                                                spanProgress.hide();
+                                                spanProgress.remove();
 
                                             if (result != 'success') {
                                                 alert('Unable to retrieve latest network logon date:\n' + response);
                                                 $('<span>').addClass('smallMessage').text('[may not be current]').appendTo(span);
                                             } else {
-                                                span.attr('title', response.Formatted).text(response.Friendly);
+                                                var spanClasses = '',
+                                                    diff = moment().valueOf() - response.UnixEpoc;
+                                                if (diff > 2592000000) // 30 Days
+                                                    spanClasses = 'error';
+                                                else if (diff > 604800000) // 7 Days
+                                                    spanClasses = 'alert';
+                                                span.removeClass('alert error').addClass(spanClasses).attr('title', response.Formatted).text(response.Formatted).livestamp(response.UnixEpoc);
                                             }
                                         });
                                         window.setTimeout(function () {
                                             if (!updated) {
-                                                spanProgress = $('<span>').addClass('ajaxHelperIcon ajaxLoading ajaxShowInitially').attr('title', 'Loading...').appendTo(span);
+                                                spanProgress = $('<i>').addClass('ajaxLoading showInitially').attr('title', 'Loading...').appendTo(span);
                                             }
                                         }, 250);
                                     });
@@ -170,15 +189,67 @@
                                 @if (assignedUser != null)
                                 {
                                     <div id="Device_Show_User">
-                                        <div id="Device_Show_User_DisplayName" title="Display Name">@Html.ActionLink(assignedUser.DisplayName, MVC.User.Show(assignedUser.Id))</div>
-                                        <div id="Device_Show_User_Id" title="Id">@assignedUser.Id</div>
-                                        @if (!string.IsNullOrWhiteSpace(assignedUser.PhoneNumber))
+                                        <div id="Device_Show_User_DisplayName" title="Display Name">
+                                            @if (Authorization.Has(Claims.User.Show))
+                                            {
+                                                @Html.ActionLink(assignedUser.DisplayName, MVC.User.Show(assignedUser.UserId))
+                                            }
+                                            else
+                                            {
+                                                @assignedUser.DisplayName
+                                            }
+                                        </div>
+                                        <div id="Device_Show_User_Id" title="Id">@assignedUser.FriendlyId()</div>
+                                        @if (Authorization.Has(Claims.User.ShowDetails))
                                         {
+                                            if (!string.IsNullOrWhiteSpace(assignedUser.PhoneNumber))
+                                            {
                                             <div id="Device_Show_User_PhoneNumber" title="Phone Number">@assignedUser.PhoneNumber</div>
-                                        }
-                                        @if (!string.IsNullOrWhiteSpace(assignedUser.EmailAddress))
-                                        {
+                                            }
+                                            if (!string.IsNullOrWhiteSpace(assignedUser.EmailAddress))
+                                            {
                                             <div id="Device_Show_User_EmailAddress" title="Email Address"><a href="mailto:@(Model.Device.AssignedUser.EmailAddress)">@assignedUser.EmailAddress</a></div>
+                                            }
+                                        }
+                                        @if (Authorization.Has(Claims.User.ShowFlagAssignments))
+                                        {
+                                            <div id="Device_Show_User_Flags">
+                                                @foreach (var flag in assignedUser.UserFlagAssignments.Where(f => !f.RemovedDate.HasValue).Select(f => Tuple.Create(f, UserFlagService.GetUserFlag(f.UserFlagId))))
+                                                {
+                                                    <i class="flag fa fa-@(flag.Item2.Icon) fa-fw d-@(flag.Item2.IconColour)"><span class="details"><span class="name">@flag.Item2.Name</span>@if (flag.Item1.Comments != null)
+                                                                                                                                                                                              {<span class="comments">@flag.Item1.Comments.ToHtmlComment()</span>}<span class="added">@CommonHelpers.FriendlyDateAndUser(flag.Item1.AddedDate, flag.Item1.AddedUserId)</span></span></i>
+                                                }
+                                                <script type="text/javascript">
+                                                    $(function () {
+                                                        $('#Device_Show_User_Flags')
+                                                            .tooltip({
+                                                                items: 'i.flag',
+                                                                content: function () {
+                                                                    var $this = $(this);
+                                                                    return $this.children('.details').html();
+                                                                },
+                                                                tooltipClass: 'User_FlagAssignment_Tooltip',
+                                                                position: {
+                                                                    my: "right top",
+                                                                    at: "right bottom",
+                                                                    collision: "flipfit flip"
+                                                                },
+                                                                hade: {
+                                                                    effect: ''
+                                                                },
+                                                                close: function (e, ui) {
+                                                                    ui.tooltip.hover(
+                                                                        function () {
+                                                                            $(this).stop(true).fadeTo(100, 1);
+                                                                        },
+                                                                        function () {
+                                                                            $(this).fadeOut(100, function () { $(this).remove(); });
+                                                                        });
+                                                                }
+                                                            });
+                                                    });
+                                                </script>
+                                            </div>
                                         }
                                     </div>
                                 }
@@ -197,15 +268,35 @@
                         <script type="text/javascript">
                             $(function () {
                                 var generatePdfUrl = '@Url.Action(MVC.API.Device.GeneratePdf(Model.Device.SerialNumber.ToString(), null))?DocumentTemplateId=';
-                            var $documentTemplates = $('#Device_Show_GenerateDocument');
-                            $documentTemplates.change(function () {
-                                var v = $documentTemplates.val();
-                                if (v) {
-                                    window.location.href = generatePdfUrl + v;
-                                    $documentTemplates.val('').blur();
-                                }
+                                var $documentTemplates = $('#Device_Show_GenerateDocument');
+                                var $generationHost;
+
+                                $documentTemplates.change(function () {
+                                    var v = $documentTemplates.val();
+                                    if (v) {
+                                        var url = generatePdfUrl + v;
+
+                                        if ($.connection && $.connection.hub && $.connection.hub.transport &&
+                                                $.connection.hub.transport.name == 'foreverFrame') {
+                                            // SignalR active with foreverFrame transport - use popup window
+                                            window.open(url, '_blank', 'height=150,width=250,location=no,menubar=no,resizable=no,scrollbars=no,status=no,toolbar=no');
+                                        } else {
+                                            // use iFrame
+                                            if (!$generationHost) {
+                                                $generationHost = $('<iframe>')
+                                                    .attr({ 'src': url, 'title': 'Document Generation Host' })
+                                                    .addClass('hidden')
+                                                    .appendTo('body')
+                                                    .contents();
+                                            } else {
+                                                $generationHost[0].location.href = url;
+                                            }
+                                        }
+
+                                        $documentTemplates.val('').blur();
+                                    }
+                                });
                             });
-                        });
                         </script>
                     </div>
                 }
@@ -214,7 +305,14 @@
         <td id="Device_Show_Policies" rowspan="2">
             <div>
                 <div id="Device_Show_Policies_Profile">
-                    <h2 title="Device Profile">@Html.ActionLink(Model.Device.DeviceProfile.Name, MVC.Config.DeviceProfile.Index(Model.Device.DeviceProfileId))</h2>
+                    <h2 title="Device Profile">@if (Authorization.Has(Claims.Config.DeviceProfile.Show))
+                                               {
+                        @Html.ActionLink(Model.Device.DeviceProfile.Name, MVC.Config.DeviceProfile.Index(Model.Device.DeviceProfileId))
+                                               }
+                                               else
+                                               {
+                        @Model.Device.DeviceProfile.Name          
+                                               }</h2>
                     <table class="none verticalHeadings">
                         <tr>
                             <td><span title="Distribution Type">Distribution:</span>
@@ -252,7 +350,7 @@
                     </table>
                     @if (Model.Device.CanUpdateDeviceProfile())
                     {
-                        @Html.ActionLinkSmallButton("Update Profile", MVC.API.Device.UpdateDeviceProfileId(Model.Device.SerialNumber, null, true), "Device_Show_Policies_Profile_Actions_Update_Button")
+                        @Html.ActionLinkSmallButton("Update Profile", MVC.API.Device.UpdateDeviceProfileId(Model.Device.SerialNumber, redirect: true), "Device_Show_Policies_Profile_Actions_Update_Button")
 
                         <div id="Device_Show_Policies_Profile_Actions_Update_Dialog" class="dialog" title="Assign to Device Profile">
                             <div>
@@ -322,7 +420,14 @@
                 <div id="Device_Show_Policies_Batch" class="status">
                     @if (Model.Device.DeviceBatchId.HasValue)
                     {
-                        <h2 title="Device Batch">@Html.ActionLink(Model.Device.DeviceBatch.Name, MVC.Config.DeviceBatch.Index(Model.Device.DeviceBatchId.Value))</h2>
+                        <h2 title="Device Batch">@if (Authorization.Has(Claims.Config.DeviceBatch.Show))
+                                                 {
+                            @Html.ActionLink(Model.Device.DeviceBatch.Name, MVC.Config.DeviceBatch.Index(Model.Device.DeviceBatchId.Value))
+                                                 }
+                                                 else
+                                                 {
+                            @Model.Device.DeviceBatch.Name
+                                                 }</h2>
                         <table class="none verticalHeadings">
                             <tr>
                                 <td><span title="Purchased Date">Purchased:</span>
@@ -370,7 +475,7 @@
                                     @foreach (var db in Model.DeviceBatches.OrderBy(i => i.Name))
                                     {
                                         <li>
-                                            <input type="radio" data-devicebatchid="@db.Id" name="DeviceBatch" id="DeviceBatch_@(db.Id)" /><label for="DeviceBatch_@(db.Id)" title="Purchased: @(db.PurchaseDate.ToFuzzy())">@db.Name</label></li>   
+                                            <input type="radio" data-devicebatchid="@db.Id" name="DeviceBatch" id="DeviceBatch_@(db.Id)" /><label for="DeviceBatch_@(db.Id)" title="Purchased: @(db.PurchaseDate.ToLongDateString())">@db.Name</label></li>   
                                     }
                                 </ul>
                             </div>
@@ -419,7 +524,9 @@
                                         });
                                     }
 
-                                    dialogInputs.filter('[data-devicebatchid=' + currentBatch + ']').prop('checked', true).change();
+                                    if (!!currentBatch) {
+                                        dialogInputs.filter('[data-devicebatchid=' + currentBatch + ']').prop('checked', true).change();
+                                    }
 
                                     buttonDialog.dialog('open');
                                     return false;
@@ -434,7 +541,14 @@
         <td id="Device_Show_Aspects" rowspan="2">
             <div>
                 <div id="Device_Show_Aspects_Model" class="clearfix">
-                    <h2 id="Device_Show_Aspects_Model_Description" title="Model Description">@Html.ActionLink(Model.Device.DeviceModel.ToString(), MVC.Config.DeviceModel.Index(Model.Device.DeviceModelId))</h2>
+                    <h2 id="Device_Show_Aspects_Model_Description" title="Model Description">@if (Authorization.Has(Claims.Config.DeviceModel.Show))
+                                                                                             {
+                        @Html.ActionLink(Model.Device.DeviceModel.ToString(), MVC.Config.DeviceModel.Index(Model.Device.DeviceModelId))
+                                                                                             }
+                                                                                             else
+                                                                                             {
+                        @Model.Device.DeviceModel.ToString()
+                                                                                             }</h2>
                     <img id="Device_Show_Aspects_Model_Image" alt="Model Image" src="@Url.Action(MVC.API.DeviceModel.Image(Model.Device.DeviceModelId, Model.Device.DeviceModel.ImageHash()))" />
                 </div>
             </div>
@@ -449,13 +563,14 @@
             }
             @if (Model.Device.CanUpdateAssignment())
             {
-                @Html.ActionLinkSmallButton("Update Assignment", MVC.API.Device.UpdateAssignedUserId(Model.Device.SerialNumber, null, true), "Device_Show_User_Actions_Assign_Button")
+                <a id="Device_Show_User_Actions_Assign_Button" href="#" class="button small">Update Assignment</a>
                 <div id="Device_Show_User_Actions_Assign_Dialog" class="dialog" title="Assign this Device?">
-                    <p>
-                        <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
-                        Assign to User:
-                                            <input id="Device_Show_User_Actions_Assign_UserId" type="text" />
-                    </p>
+                    <h4><i class="fa fa-info-circle information"></i>&nbsp;Assign to User:</h4>
+                    <br />
+                    @using (Html.BeginForm(MVC.API.Device.UpdateAssignedUserId(Model.Device.SerialNumber, redirect: true)))
+                    {
+                        <input id="Device_Show_User_Actions_Assign_UserId" name="AssignedUserId" type="text" />
+                    }
                 </div>
                 <script type="text/javascript">
                     $(function () {
@@ -465,17 +580,19 @@
 
                         var dialogButtons = {
                                                 @{
-                if (assignedUser != null)
-                {
+                    if (assignedUser != null)
+                    {
                                                         <text>
                             "Unassign": function () {
                                 var $this = $(this);
                                 $this.dialog("disable");
                                 $this.dialog("option", "buttons", null);
-                                window.location.href = button.attr('href');
+
+                                inputUserId.val('');
+                                inputUserId.closest('form').submit()
                             },
                                                 </text>
-                }
+                    }
                                                 }
                             "Assign": function () {
                                 var $this = $(this);
@@ -483,7 +600,7 @@
                                 if (userId) {
                                     $this.dialog("disable");
                                     $this.dialog("option", "buttons", null);
-                                    window.location.href = button.attr('href') + '&AssignedUserId=' + userId;
+                                    inputUserId.closest('form').submit()
                                 } else {
                                     alert('Enter a user to assign this device');
                                 }
@@ -498,7 +615,7 @@
                                 buttonDialog = $('#Device_Show_User_Actions_Assign_Dialog')
                                                     .dialog({
                                                         resizable: false,
-                                                        height: 160,
+                                                        height: 180,
                                                         modal: true,
                                                         autoOpen: false,
                                                         buttons: dialogButtons
@@ -506,7 +623,7 @@
                                 inputUserId = $('#Device_Show_User_Actions_Assign_UserId');
                                 inputUserId.focus(function () { inputUserId.select() })
                                     .autocomplete({
-                                        source: '@(Url.Action(MVC.API.User.UpstreamUsers()))',
+                                        source: '@(Url.Action(MVC.API.Search.UsersUpstream()))',
                                         minLength: 2,
                                         select: function (e, ui) {
                                             inputUserId.val(ui.item.Id);
@@ -531,47 +648,52 @@
             @if (Model.Device.CanUpdateTrustEnrol())
             {
                 @Html.ActionLinkSmallButton("Trust Enrol", MVC.API.Device.UpdateAllowUnauthenticatedEnrol(Model.Device.SerialNumber, true.ToString(), true), "Device_Show_Device_Actions_TrustEnrol_Button")
-                <div id="Device_Show_Device_Actions_TrustEnrol_Dialog" title="Trust this Device?">
-                    <div class="ui-widget">
-                        <div class="ui-state-highlight ui-corner-all" style="padding: 6px;">
-                            <div style="padding-bottom: 6px;">
-                                <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
-                                This action will allow a device <em>claiming</em> to have the Serial Number '@(Model.Device.SerialNumber)' to be enrolled without authentication.
-                            </div>
+                <div id="Device_Show_Device_Actions_TrustEnrol_Dialog" class="dialog" title="Trust this Device?">
+                    <p>
+                        Devices flagged as 'trusted' are allowed a single-use device enrolment without providing authentication (for example: Active Directory Computer Account).
+                    </p>
+                    <p>
+                        Once a device enrols, its trust setting is reset and additional enrolments need to be authenticated (domain joined) or manually trusted again.
+                    </p>
+                    <div class="info-box" style="margin-top: 1em;">
+                        <p class="fa-p" style="margin-bottom: 1em;">
+                            <i class="fa fa-exclamation-triangle"></i>This action will allow a device <em>claiming</em> to have the Serial Number '@(Model.Device.SerialNumber)' to be enrolled without authentication.
+                        </p>
+                        <div>
                             <strong>Are you sure you want to allow an unauthenticated enrolment?</strong>
                         </div>
-                    </div>
-                    <div class="smallMessage" style="margin-top: 10px; font-size: 1em;">
-                        Devices flagged as 'trusted' are allowed a single-use device enrolment without providing authentication (for example: Active Directory Computer Account).<br />
-                        Once a devices enrol, their trust setting is reset and additional enrolments need to be authenticated (domain joined) or manually trusted again.
                     </div>
                 </div>
                 <script type="text/javascript">
                     $(function () {
                         var button = $('#Device_Show_Device_Actions_TrustEnrol_Button');
-                        var buttonDialog = $('#Device_Show_Device_Actions_TrustEnrol_Dialog');
-                        var buttonLink = button.attr('href');
-                        button.attr('href', '#');
+                        var buttonDialog;
                         button.click(function () {
-                            buttonDialog.dialog('open');
-                            return false;
-                        });
-                        buttonDialog.dialog({
-                            resizable: false,
-                            width: 400,
-                            modal: true,
-                            autoOpen: false,
-                            buttons: {
-                                "Trust": function () {
-                                    var $this = $(this);
-                                    $this.dialog("disable");
-                                    $this.dialog("option", "buttons", null);
-                                    window.location.href = buttonLink;
-                                },
-                                Cancel: function () {
-                                    $(this).dialog("close");
-                                }
+                            if (!buttonDialog) {
+                                var buttonLink = button.attr('href');
+                                button.attr('href', '#');
+                                buttonDialog = $('#Device_Show_Device_Actions_TrustEnrol_Dialog').dialog({
+                                    resizable: false,
+                                    width: 400,
+                                    modal: true,
+                                    autoOpen: false,
+                                    buttons: {
+                                        "Trust": function () {
+                                            var $this = $(this);
+                                            $this.dialog("disable");
+                                            $this.dialog("option", "buttons", null);
+                                            window.location.href = buttonLink;
+                                        },
+                                        Cancel: function () {
+                                            $(this).dialog("close");
+                                        }
+                                    }
+                                });
                             }
+
+                            buttonDialog.dialog('open');
+
+                            return false;
                         });
                     });
                 </script>
@@ -580,11 +702,14 @@
             {
                 @Html.ActionLinkSmallButton("Untrust Enrol", MVC.API.Device.UpdateAllowUnauthenticatedEnrol(Model.Device.SerialNumber, false.ToString(), true), "Device_Show_Device_Actions_UntrustEnrol_Button")
                 <div id="Device_Show_Device_Actions_UntrustEnrol_Dialog" title="Untrust this Device?">
-                    <div style="padding-bottom: 6px;">
-                        <span class="ui-icon ui-icon-info" style="float: left; margin: 0 7px 20px 0;"></span>
-                        This action will require the device to enrol with authentication (for example: domain joined).
+                    <div class="info-box">
+                        <p class="fa-p" style="margin-bottom: 1em;">
+                            <i class="fa fa-info-circle"></i>This action will require the device to enrol with authentication (for example: domain joined).
+                        </p>
+                        <div>
+                            <strong>Are you sure you want to require an authenticated enrolment?</strong>
+                        </div>
                     </div>
-                    <strong>Are you sure you want to require an authenticated enrolment?</strong>
                 </div>
                 <script type="text/javascript">
                     $(function () {
@@ -621,16 +746,15 @@
                 @Html.ActionLinkSmallButton("Decommission", MVC.API.Device.Decommission(), "Device_Show_Device_Actions_Decommission_Button")
                 <div id="Device_Show_Device_Actions_Decommission_Dialog" class="dialog" title="Device Decommissioning">
                     <div class="clearfix" style="margin-bottom: 10px;">
-                        <span class="ui-icon ui-icon-info" style="float: left; margin: 0 7px 0 0;"></span>
-                        Why was this Device Decommissioned?
+                        <i class="fa fa-question-circle fa-lg information"></i>&nbsp;Why is this device to be decommissioned?
                     </div>
                     <div>
                         <ul class="none">
-                            @foreach (Device.DecommissionReasons decommissionReason in Enum.GetValues(typeof(Device.DecommissionReasons)))
+                            @foreach (DecommissionReasons decommissionReason in Enum.GetValues(typeof(DecommissionReasons)).Cast<DecommissionReasons>().OrderBy(r => r.ToString()))
                             {
                                 <li>
                                     <input type="radio" id="Device_Show_Device_Actions_Decommission_Reason_@((int)decommissionReason)"
-                                        name="Device_Show_Device_Actions_Decommission_Reason" value="@((int)decommissionReason)" @((decommissionReason == Device.DecommissionReasons.EndOfLife) ? "checked=\"checked\"" : string.Empty)/>
+                                        name="Device_Show_Device_Actions_Decommission_Reason" value="@((int)decommissionReason)" @((decommissionReason == DecommissionReasons.EndOfLife) ? "checked=\"checked\"" : string.Empty)/>
                                     <label for="Device_Show_Device_Actions_Decommission_Reason_@((int)decommissionReason)">@(decommissionReason.ReasonMessage())</label>
                                 </li>
                             }
@@ -683,8 +807,7 @@
                 @Html.ActionLinkSmallButton("Recommission", MVC.API.Device.Recommission(Model.Device.SerialNumber, true), "Device_Show_Device_Actions_Recommission_Button")
                 <div id="Device_Show_Device_Actions_Recommission_Dialog" title="Recommission this Device?">
                     <p>
-                        <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
-                        Are you sure?
+                        <i class="fa fa-exclamation-triangle fa-lg"></i>&nbsp;Are you sure?
                     </p>
                 </div>
                 <script type="text/javascript">
@@ -722,7 +845,7 @@
                 @Html.ActionLinkSmallButton("Delete Device", MVC.API.Device.Delete(Model.Device.SerialNumber, true), "Device_Show_Device_Actions_Delete_Button")
                 <div id="Device_Show_Device_Actions_Delete_Dialog" title="Delete this Device?">
                     <p>
-                        <span class="ui-icon ui-icon-alert" style="float: left; margin: 0 7px 20px 0;"></span>
+                        <i class="fa fa-exclamation-triangle fa-lg"></i>&nbsp;
                         This item will be permanently deleted and cannot be recovered.<br />
                         Jobs linked to this Device (but not to a User) will be deleted also.<br />
                         Are you sure?

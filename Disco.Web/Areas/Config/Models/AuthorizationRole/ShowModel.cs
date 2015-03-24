@@ -1,6 +1,6 @@
-﻿using Disco.Models.Authorization;
-using Disco.Models.Interop.ActiveDirectory;
+﻿using Disco.Models.Services.Authorization;
 using Disco.Models.UI.Config.AuthorizationRole;
+using Disco.Web.Areas.API.Models.Shared;
 using Disco.Web.Models.Shared;
 using System;
 using System.Collections.Generic;
@@ -13,7 +13,7 @@ namespace Disco.Web.Areas.Config.Models.AuthorizationRole
     {
         public IRoleToken Token { get; set; }
 
-        public List<SubjectDescriptor> Subjects { get; set; }
+        public List<SubjectDescriptorModel> Subjects { get; set; }
 
         public IClaimNavigatorItem ClaimNavigator { get; set; }
 
@@ -27,27 +27,6 @@ namespace Disco.Web.Areas.Config.Models.AuthorizationRole
                 return new FancyTreeNode[] {
                     rootNode
                 };
-            }
-        }
-
-        public class SubjectDescriptor
-        {
-            public bool IsGroup { get; set; }
-            public string Name { get; set; }
-            public string Id { get; set; }
-
-            public static SubjectDescriptor FromActiveDirectoryObject(IActiveDirectoryObject ADObject)
-            {
-                var item = new SubjectDescriptor()
-                {
-                    Id = ADObject.SamAccountName,
-                    Name = ADObject.Name
-                };
-
-                if (ADObject is ActiveDirectoryGroup)
-                    item.IsGroup = true;
-
-                return item;
             }
         }
     }

@@ -34,6 +34,9 @@
     <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.6.0.3\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.ComponentModel.DataAnnotations" />
     <Reference Include="System.Core" />
@@ -45,27 +48,21 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Authorization\IAuthorizationToken.cs" />
-    <Compile Include="Authorization\IClaimNavigatorItem.cs" />
-    <Compile Include="Authorization\IRoleToken.cs" />
+    <Compile Include="BI\Job\LocationModes.cs" />
+    <Compile Include="ClientServices\Register.cs" />
+    <Compile Include="ClientServices\RegisterResponse.cs" />
+    <Compile Include="Repository\Device\DeviceDecommissionReasons.cs" />
+    <Compile Include="Repository\User\Flag\UserFlag.cs" />
+    <Compile Include="Repository\User\Flag\UserFlagAssignment.cs" />
+    <Compile Include="Services\Authorization\IAuthorizationToken.cs" />
+    <Compile Include="Services\Authorization\IClaimNavigatorItem.cs" />
+    <Compile Include="Services\Authorization\IRoleToken.cs" />
     <Compile Include="BI\Config\OrganisationAddress.cs" />
     <Compile Include="BI\Device\ImportDevice.cs" />
     <Compile Include="BI\Device\ImportDeviceSession.cs" />
     <Compile Include="BI\DocumentTemplate\DocumentState.cs" />
     <Compile Include="BI\Expressions\IImageExpressionResult.cs" />
-    <Compile Include="BI\Interop\Community\PluginLibraryCompatibilityItem.cs" />
-    <Compile Include="BI\Interop\Community\PluginLibraryCompatibilityResponse.cs" />
-    <Compile Include="BI\Interop\Community\PluginLibraryCompatibilityRequest.cs" />
-    <Compile Include="BI\Interop\Community\PluginLibraryItem.cs" />
-    <Compile Include="BI\Interop\Community\PluginLibraryUpdateRequest.cs" />
-    <Compile Include="BI\Interop\Community\PluginLibraryUpdateResponse.cs" />
-    <Compile Include="BI\Interop\Community\UpdateRequestBase.cs" />
-    <Compile Include="BI\Interop\Community\UpdateRequestV1.cs" />
-    <Compile Include="BI\Interop\Community\UpdateResponse.cs" />
-    <Compile Include="BI\Job\JobTableModel.cs" />
     <Compile Include="BI\Job\Statistics\DailyOpenedClosedItem.cs" />
-    <Compile Include="BI\Search\DeviceSearchResultItem.cs" />
-    <Compile Include="BI\Search\UserSearchResultItem.cs" />
     <Compile Include="ClientServices\EnrolResponse.cs" />
     <Compile Include="ClientServices\MacEnrol.cs" />
     <Compile Include="ClientServices\MacEnrolResponse.cs" />
@@ -74,10 +71,6 @@
     <Compile Include="ClientServices\Enrol.cs" />
     <Compile Include="ClientServices\WhoAmI.cs" />
     <Compile Include="ClientServices\WhoAmIResponse.cs" />
-    <Compile Include="Interop\ActiveDirectory\ActiveDirectoryMachineAccount.cs" />
-    <Compile Include="Interop\ActiveDirectory\ActiveDirectoryGroup.cs" />
-    <Compile Include="Interop\ActiveDirectory\ActiveDirectoryUserAccount.cs" />
-    <Compile Include="Interop\ActiveDirectory\IActiveDirectoryObject.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Repository\ConfigurationItem.cs" />
     <Compile Include="Repository\Device\Device.cs" />
@@ -91,7 +84,6 @@
     <Compile Include="Repository\Device\DeviceCertificate.cs" />
     <Compile Include="Repository\DocumentTemplate\DocumentTemplate.cs" />
     <Compile Include="Repository\Job\Job.cs" />
-    <Compile Include="Repository\Job\JobAssignment.cs" />
     <Compile Include="Repository\Job\JobAttachment.cs" />
     <Compile Include="Repository\Job\JobComponent.cs" />
     <Compile Include="Repository\Job\JobLog.cs" />
@@ -100,10 +92,39 @@
     <Compile Include="Repository\Job\JobMeta\JobMetaWarranty.cs" />
     <Compile Include="Repository\Job\JobSubType.cs" />
     <Compile Include="Repository\Job\JobType.cs" />
+    <Compile Include="Repository\Job\Queue\JobQueue.cs" />
+    <Compile Include="Repository\Job\Queue\JobQueueJob.cs" />
+    <Compile Include="Repository\Job\Queue\JobQueuePriority.cs" />
     <Compile Include="Repository\User\User.cs" />
     <Compile Include="Repository\User\UserAttachment.cs" />
     <Compile Include="Repository\User\UserDetail.cs" />
     <Compile Include="Repository\User\AuthorizationRole.cs" />
+    <Compile Include="Services\Devices\Exporting\DeviceExportRecord.cs" />
+    <Compile Include="Services\Devices\Exporting\DeviceExportResult.cs" />
+    <Compile Include="Services\Devices\Exporting\DeviceExportTypes.cs" />
+    <Compile Include="Services\Devices\Exporting\DeviceExportOptions.cs" />
+    <Compile Include="Services\Devices\Importing\DeviceImportFieldTypes.cs" />
+    <Compile Include="Services\Devices\Importing\IDeviceImportRecord.cs" />
+    <Compile Include="Services\Devices\Importing\IDeviceImportContext.cs" />
+    <Compile Include="Services\Devices\Importing\IDeviceImportField.cs" />
+    <Compile Include="Services\Interop\ActiveDirectory\ADManagedGroupConfiguration.cs" />
+    <Compile Include="Services\Interop\DiscoServices\PluginIncompatibility.cs" />
+    <Compile Include="Services\Interop\DiscoServices\PluginLibraryIncompatibility.cs" />
+    <Compile Include="Services\Interop\DiscoServices\PluginLibraryManifestV2.cs" />
+    <Compile Include="Services\Interop\DiscoServices\PublishJobResult.cs" />
+    <Compile Include="Services\Interop\DiscoServices\UpdateRequestV2.cs" />
+    <Compile Include="Services\Interop\DiscoServices\UpdateResponseV2.cs" />
+    <Compile Include="Services\Jobs\JobLists\JobLocationReference.cs" />
+    <Compile Include="Services\Jobs\JobLists\JobTableItemModel.cs" />
+    <Compile Include="Services\Jobs\JobLists\JobTableModel.cs" />
+    <Compile Include="Services\Jobs\JobLists\JobTableStatusItemModel.cs" />
+    <Compile Include="Services\Jobs\JobLists\JobTableStatusQueueItemModel.cs" />
+    <Compile Include="Services\Jobs\JobQueues\IJobQueueToken.cs" />
+    <Compile Include="Services\Jobs\Noticeboards\IHeldDeviceItem.cs" />
+    <Compile Include="Services\Searching\DeviceSearchResultItem.cs" />
+    <Compile Include="Services\Searching\ISearchResultItem.cs" />
+    <Compile Include="Services\Searching\JobSearchResultItem.cs" />
+    <Compile Include="Services\Searching\UserSearchResultItem.cs" />
     <Compile Include="UI\BaseUIModel.cs" />
     <Compile Include="UI\Config\AuthorizationRole\ConfigAuthorizationRoleCreateModel.cs" />
     <Compile Include="UI\Config\AuthorizationRole\ConfigAuthorizationRoleIndexModel.cs" />
@@ -132,10 +153,18 @@
     <Compile Include="UI\Config\Enrolment\ConfigEnrolmentIndexModel.cs" />
     <Compile Include="UI\Config\Enrolment\ConfigEnrolmentStatusModel.cs" />
     <Compile Include="UI\Config\JobPreferences\ConfigJobPreferencesIndexModel.cs" />
+    <Compile Include="UI\Config\JobQueue\ConfigJobQueueCreateModel.cs" />
+    <Compile Include="UI\Config\JobQueue\ConfigJobQueueIndexModel.cs" />
+    <Compile Include="UI\Config\JobQueue\ConfigJobQueueShowModel.cs" />
     <Compile Include="UI\Config\Logging\ConfigLoggingIndexModel.cs" />
-    <Compile Include="UI\Config\Logging\ConfigLoggingTaskStatusModel.cs" />
+    <Compile Include="UI\Config\Shared\ConfigSharedTaskStatusModel.cs" />
     <Compile Include="UI\Config\Organisation\ConfigOrganisationIndexModel.cs" />
+    <Compile Include="UI\Config\UserFlag\ConfigUserFlagCreateModel.cs" />
+    <Compile Include="UI\Config\UserFlag\ConfigUserFlagIndexModel.cs" />
+    <Compile Include="UI\Config\UserFlag\ConfigUserFlagShowModel.cs" />
     <Compile Include="UI\Device\DeviceAddOfflineModel.cs" />
+    <Compile Include="UI\Device\DeviceExportModel.cs" />
+    <Compile Include="UI\Device\DeviceImportHeadersModel.cs" />
     <Compile Include="UI\Device\DeviceImportModel.cs" />
     <Compile Include="UI\Device\DeviceImportReviewModel.cs" />
     <Compile Include="UI\Device\DeviceIndexModel.cs" />
@@ -150,18 +179,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <ProjectExtensions>
-    <VisualStudio>
-      <UserProperties BuildVersion_UpdateFileVersion="True" BuildVersion_UpdateAssemblyVersion="True" BuildVersion_BuildVersioningStyle="None.DeltaBaseYear.MonthAndDayStamp.TimeStamp" BuildVersion_StartDate="2011/7/1" BuildVersion_DetectChanges="False" BuildVersion_UseGlobalSettings="False" BuildVersion_BuildAction="Both" />
-    </VisualStudio>
-  </ProjectExtensions>
-  <PropertyGroup>
-    <PostBuildEvent>
-    </PostBuildEvent>
-  </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">

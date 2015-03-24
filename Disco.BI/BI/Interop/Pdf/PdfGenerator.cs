@@ -1,18 +1,18 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using Disco.Models.Repository;
+﻿using Disco.BI.Expressions;
+using Disco.BI.Extensions;
 using Disco.Data.Repository;
 using Disco.Models.BI.DocumentTemplates;
-using System.IO;
-using iTextSharp.text.pdf;
-using System.Collections.Concurrent;
-using Disco.BI.Expressions;
-using System.Collections;
-using Disco.BI.Extensions;
 using Disco.Models.BI.Expressions;
+using Disco.Models.Repository;
+using Disco.Services.Interop.ActiveDirectory;
 using Disco.Services.Users;
+using iTextSharp.text.pdf;
+using System;
+using System.Collections;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace Disco.BI.Interop.Pdf
 {
@@ -65,9 +65,11 @@ namespace Disco.BI.Interop.Pdf
                     DataObjects = new object[DataObjectsIds.Length];
                     for (int idIndex = 0; idIndex < DataObjectsIds.Length; idIndex++)
                     {
-                        DataObjects[idIndex] = UserService.GetUser(DataObjectsIds[idIndex], Database, true);
+                        string dataObjectId = DataObjectsIds[idIndex];
+
+                        DataObjects[idIndex] = UserService.GetUser(ActiveDirectory.ParseDomainAccountId(dataObjectId), Database, true);
                         if (DataObjects[idIndex] == null)
-                            throw new Exception(string.Format("Unknown Username specified: {0}", DataObjectsIds[idIndex]));
+                            throw new Exception(string.Format("Unknown Username specified: {0}", dataObjectId));
                     }
                     break;
                 default:
@@ -119,10 +121,10 @@ namespace Disco.BI.Interop.Pdf
 
             foreach (string pdfFieldKey in pdfStamper.AcroFields.Fields.Keys)
             {
-                if (pdfFieldKey.Equals("DiscoAttachmentId", StringComparison.InvariantCultureIgnoreCase))
+                if (pdfFieldKey.Equals("DiscoAttachmentId", StringComparison.OrdinalIgnoreCase))
                 {
                     AcroFields.Item fields = pdfStamper.AcroFields.Fields[pdfFieldKey];
-                    string fieldValue = dt.UniqueIdentifier(Data, CreatorUser.Id, TimeStamp);
+                    string fieldValue = dt.UniqueIdentifier(Data, CreatorUser.UserId, TimeStamp);
                     if (FlattenFields)
                         pdfStamper.AcroFields.SetField(pdfFieldKey, String.Empty);
                     else
@@ -132,7 +134,7 @@ namespace Disco.BI.Interop.Pdf
                     for (int pdfFieldOrdinal = 0; pdfFieldOrdinal < fields.Size; pdfFieldOrdinal++)
                     {
                         AcroFields.FieldPosition pdfFieldPosition = pdfFieldPositions[pdfFieldOrdinal];
-                        string pdfBarcodeContent = dt.UniquePageIdentifier(Data, CreatorUser.Id, TimeStamp, pdfFieldPosition.page);
+                        string pdfBarcodeContent = dt.UniquePageIdentifier(Data, CreatorUser.UserId, TimeStamp, pdfFieldPosition.page);
                         BarcodeQRCode pdfBarcode = new BarcodeQRCode(pdfBarcodeContent, (int)pdfFieldPosition.position.Width, (int)pdfFieldPosition.position.Height, null);
                         iTextSharp.text.Image pdfBarcodeImage = pdfBarcode.GetImage();
                         pdfBarcodeImage.SetAbsolutePosition(pdfFieldPosition.position.Left, pdfFieldPosition.position.Bottom);
@@ -237,10 +239,10 @@ namespace Disco.BI.Interop.Pdf
                 JobLog jl = new JobLog()
                 {
                     JobId = j.Id,
-                    TechUserId = CreatorUser.Id,
+                    TechUserId = CreatorUser.UserId,
                     Timestamp = DateTime.Now
                 };
-                jl.Comments = string.Format("Document Generated{0}{1} [{2}]", Environment.NewLine, dt.Description, dt.Id);
+                jl.Comments = string.Format("# Document Generated\r\n**{0}** [{1}]", dt.Description, dt.Id);
                 Database.JobLogs.Add(jl);
             }
 
